@@ -9,10 +9,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  fromMachineSpeed,
   MACHINE_SPEED_UNIT_LABELS,
   MACHINE_SPEED_UNITS,
+  toMachineSpeed,
   type MachineSpeedUnit,
 } from "@/lib/ble/ftms/speed-units";
+import { speedUnitLabel } from "@/lib/format";
 
 /**
  * Speed and incline control.
@@ -30,11 +33,17 @@ export function TreadmillControls() {
     setTargetIncline,
     speedRange,
     inclineRange,
+    machineSpeedUnit,
   } = useWorkout();
 
   const connected = treadmill.connection === "connected";
   const inclineSupported = treadmill.features?.targets.inclination ?? true;
   const speedSupported = treadmill.features?.targets.speed ?? true;
+
+  // The control speaks the machine's unit, so the number the runner dials in is
+  // the number the treadmill acts on. km/h stays the app's internal currency.
+  const shown = (speedKph: number) => Number(toMachineSpeed(speedKph, machineSpeedUnit).toFixed(2));
+  const commanded = (shownSpeed: number) => fromMachineSpeed(shownSpeed, machineSpeedUnit);
 
   return (
     <Card>
@@ -53,15 +62,17 @@ export function TreadmillControls() {
         <ControlRow
           icon={Gauge}
           label="Target speed"
-          value={targetSpeedKph}
-          unit="km/h"
+          value={shown(targetSpeedKph)}
+          unit={speedUnitLabel(machineSpeedUnit)}
           decimals={1}
-          min={speedRange.minKph}
-          max={speedRange.maxKph}
-          step={Math.max(0.1, speedRange.incrementKph)}
-          actual={treadmill.data.speedKph}
+          min={shown(speedRange.minKph)}
+          max={shown(speedRange.maxKph)}
+          step={Math.max(0.1, shown(speedRange.incrementKph))}
+          actual={
+            treadmill.data.speedKph === undefined ? undefined : shown(treadmill.data.speedKph)
+          }
           disabled={!connected || !speedSupported}
-          onCommit={setTargetSpeed}
+          onCommit={(value) => setTargetSpeed(commanded(value))}
         />
 
         <ControlRow
