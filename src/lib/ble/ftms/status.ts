@@ -1,4 +1,9 @@
 import { ByteCursor } from "../byte-cursor";
+import {
+  DEFAULT_MACHINE_SPEED_UNIT,
+  fromMachineSpeed,
+  type MachineSpeedUnit,
+} from "./speed-units";
 
 /**
  * Fitness Machine Status (0x2ADA).
@@ -44,6 +49,7 @@ export interface FitnessMachineStatus {
 
 export function parseFitnessMachineStatus(
   source: DataView | ArrayBuffer | Uint8Array,
+  unit: MachineSpeedUnit = DEFAULT_MACHINE_SPEED_UNIT,
 ): FitnessMachineStatus {
   const cursor = new ByteCursor(source);
 
@@ -87,7 +93,7 @@ export function parseFitnessMachineStatus(
 
     case StatusOpCode.targetSpeedChanged: {
       if (!cursor.has(2)) return { opCode, message: "Target speed changed" };
-      const targetSpeedKph = cursor.uint16() / 100;
+      const targetSpeedKph = fromMachineSpeed(cursor.uint16() / 100, unit);
       return {
         opCode,
         targetSpeedKph,

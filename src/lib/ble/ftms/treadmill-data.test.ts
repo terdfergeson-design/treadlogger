@@ -16,6 +16,24 @@ describe("parseTreadmillData", () => {
     expect(data.speedKph).toBe(10.5);
   });
 
+  it("reads speeds in the machine's unit when that unit is mph", () => {
+    // Same bytes as above: 1050 is 10.50 mph on this machine, so 16.9 km/h.
+    const data = parseTreadmillData(bytesToDataView([0x00, 0x00, 0x1a, 0x04]), "mph");
+
+    expect(data.speedKph).toBeCloseTo(16.898, 3);
+  });
+
+  it("converts average speed as well as instantaneous speed", () => {
+    // flags 0x0002: instantaneous speed present (bit 0 clear) plus average.
+    const data = parseTreadmillData(
+      bytesToDataView([0x02, 0x00, 0x5e, 0x01, 0x2c, 0x01]),
+      "mph",
+    );
+
+    expect(data.speedKph).toBeCloseTo(5.633, 3);
+    expect(data.averageSpeedKph).toBeCloseTo(4.828, 3);
+  });
+
   it("omits instantaneous speed when the More Data bit is set", () => {
     // Bit 0 is inverted: set means the speed field was not transmitted.
     const data = parseTreadmillData(bytesToDataView([0x01, 0x00]));

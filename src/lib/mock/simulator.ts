@@ -1,5 +1,16 @@
+import { ByteCursor } from "../ble/byte-cursor";
+import { setTargetSpeed as setTargetSpeedCommand } from "../ble/ftms/control-point";
+import {
+  fromMachineSpeed,
+  toMachineSpeed,
+  type MachineSpeedUnit,
+} from "../ble/ftms/speed-units";
 import { parseTreadmillData } from "../ble/ftms/treadmill-data";
-import { parseSupportedInclinationRange, parseSupportedSpeedRange } from "../ble/ftms/ranges";
+import {
+  parseSupportedInclinationRange,
+  parseSupportedSpeedRange,
+  type SpeedRange,
+} from "../ble/ftms/ranges";
 import { parseFitnessMachineStatus, StatusOpCode } from "../ble/ftms/status";
 import { parseFitnessMachineFeature } from "../ble/ftms/features";
 import { parseHeartRateMeasurement } from "../ble/hr/measurement";
@@ -123,13 +134,7 @@ export class SimulatedTreadmill extends TreadmillSource {
       features: parseFitnessMachineFeature(
         buildFeaturePayload(SIMULATED_MACHINE_FLAGS, SIMULATED_TARGET_FLAGS),
       ),
-      speedRange: parseSupportedSpeedRange(
-        buildSpeedRangePayload(
-          SIMULATED_SPEED_RANGE.minKph,
-          SIMULATED_SPEED_RANGE.maxKph,
-          SIMULATED_SPEED_RANGE.incrementKph,
-        ),
-      ),
+      speedRange: this.advertisedSpeedRange(),
       inclineRange: parseSupportedInclinationRange(
         buildInclinationRangePayload(
           SIMULATED_INCLINE_RANGE.minPercent,
@@ -148,6 +153,30 @@ export class SimulatedTreadmill extends TreadmillSource {
     this.stopTicking();
     Object.assign(this.belt, createBelt(this.profile));
     this.replace({ ...emptyTreadmillSnapshot("simulator"), connection: "idle" });
+  }
+
+  override setSpeedUnit(unit: MachineSpeedUnit): void {
+    super.setSpeedUnit(unit);
+    if (this.snapshot.connection !== "connected") return;
+
+    this.patch({ speedRange: this.advertisedSpeedRange() });
+    this.emitTreadmillData();
+  }
+
+  /**
+   * The machine's own bounds, advertised in its own unit. Read back through the
+   * parser so the simulated capability read exercises the same conversion a
+   * real machine's would.
+   */
+  private advertisedSpeedRange(): SpeedRange {
+    return parseSupportedSpeedRange(
+      buildSpeedRangePayload(
+        toMachineSpeed(SIMULATED_SPEED_RANGE.minKph, this.speedUnit),
+        toMachineSpeed(SIMULATED_SPEED_RANGE.maxKph, this.speedUnit),
+        toMachineSpeed(SIMULATED_SPEED_RANGE.incrementKph, this.speedUnit),
+      ),
+      this.speedUnit,
+    );
   }
 
   async requestControl(): Promise<void> {
@@ -183,8 +212,17 @@ export class SimulatedTreadmill extends TreadmillSource {
       );
     }
 
-    this.belt.targetSpeedKph = speedKph;
-    this.patch({ lastMessage: `Target speed set to ${speedKph.toFixed(1)} km/h` });
+    // Take the target off the wire rather than from the argument, so mock mode
+    // exercises the real encoder and the simulated belt honours exactly the
+    // value a machine of this unit would have received, quantisation included.
+    const command = setTargetSpeedCommand(speedKph, this.speedUnit);
+    const accepted = fromMachineSpeed(
+      new ByteCursor(command.subarray(1)).uint16() / 100,
+      this.speedUnit,
+    );
+
+    this.belt.targetSpeedKph = accepted;
+    this.patch({ lastMessage: `Target speed set to ${accepted.toFixed(1)} km/h` });
   }
 
   async setTargetIncline(inclinePercent: number): Promise<void> {
@@ -240,9 +278,11 @@ export class SimulatedTreadmill extends TreadmillSource {
     const belt = this.belt;
     const averageSpeedKph = belt.elapsedS > 0 ? (belt.distanceM / belt.elapsedS) * 3.6 : 0;
 
+    // The payload builder takes the machine's own unit, as a real peripheral's
+    // firmware would, and the parser converts it back.
     const payload = buildTreadmillDataPayload({
-      speedKph: belt.speedKph,
-      averageSpeedKph,
+      speedKph: toMachineSpeed(belt.speedKph, this.speedUnit),
+      averageSpeedKph: toMachineSpeed(averageSpeedKph, this.speedUnit),
       totalDistanceM: belt.distanceM,
       inclinationPercent: belt.inclinePercent,
       rampAngleDegrees: (Math.atan(belt.inclinePercent / 100) * 180) / Math.PI,
@@ -262,11 +302,17 @@ export class SimulatedTreadmill extends TreadmillSource {
       elapsedTimeS: belt.elapsedS,
     });
 
-    this.patch({ data: parseTreadmillData(payload), lastUpdateAt: Date.now() });
+    this.patch({
+      data: parseTreadmillData(payload, this.speedUnit),
+      lastUpdateAt: Date.now(),
+    });
   }
 
   private applyStatus(opCode: number, parameter: number[] = []): void {
-    const status = parseFitnessMachineStatus(buildStatusPayload(opCode, parameter));
+    const status = parseFitnessMachineStatus(
+      buildStatusPayload(opCode, parameter),
+      this.speedUnit,
+    );
     this.patch({ lastMessage: status.message });
   }
 }

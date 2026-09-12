@@ -7,6 +7,15 @@ import { useDraftValue } from "@/hooks/use-draft-value";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  fromMachineSpeed,
+  MACHINE_SPEED_UNIT_LABELS,
+  MACHINE_SPEED_UNITS,
+  toMachineSpeed,
+  type MachineSpeedUnit,
+} from "@/lib/ble/ftms/speed-units";
+import { speedUnitLabel } from "@/lib/format";
 
 /**
  * Speed and incline control.
@@ -24,11 +33,17 @@ export function TreadmillControls() {
     setTargetIncline,
     speedRange,
     inclineRange,
+    machineSpeedUnit,
   } = useWorkout();
 
   const connected = treadmill.connection === "connected";
   const inclineSupported = treadmill.features?.targets.inclination ?? true;
   const speedSupported = treadmill.features?.targets.speed ?? true;
+
+  // The control speaks the machine's unit, so the number the runner dials in is
+  // the number the treadmill acts on. km/h stays the app's internal currency.
+  const shown = (speedKph: number) => Number(toMachineSpeed(speedKph, machineSpeedUnit).toFixed(2));
+  const commanded = (shownSpeed: number) => fromMachineSpeed(shownSpeed, machineSpeedUnit);
 
   return (
     <Card>
@@ -47,15 +62,17 @@ export function TreadmillControls() {
         <ControlRow
           icon={Gauge}
           label="Target speed"
-          value={targetSpeedKph}
-          unit="km/h"
+          value={shown(targetSpeedKph)}
+          unit={speedUnitLabel(machineSpeedUnit)}
           decimals={1}
-          min={speedRange.minKph}
-          max={speedRange.maxKph}
-          step={Math.max(0.1, speedRange.incrementKph)}
-          actual={treadmill.data.speedKph}
+          min={shown(speedRange.minKph)}
+          max={shown(speedRange.maxKph)}
+          step={Math.max(0.1, shown(speedRange.incrementKph))}
+          actual={
+            treadmill.data.speedKph === undefined ? undefined : shown(treadmill.data.speedKph)
+          }
           disabled={!connected || !speedSupported}
-          onCommit={setTargetSpeed}
+          onCommit={(value) => setTargetSpeed(commanded(value))}
         />
 
         <ControlRow
@@ -74,8 +91,49 @@ export function TreadmillControls() {
           }
           onCommit={setTargetIncline}
         />
+
+        <MachineSpeedUnitSetting />
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Declares what the treadmill really means by its FTMS speed fields.
+ *
+ * The spec says kilometres per hour, but a machine built around a mph console
+ * can put miles per hour in the same fields, in which case the belt runs a
+ * factor of 1.609 fast and its reported speed reads a factor of 1.609 slow.
+ * Only the owner of the machine can tell, so it is a setting rather than a
+ * guess, and it lives next to the control where the discrepancy shows up.
+ */
+function MachineSpeedUnitSetting() {
+  const { machineSpeedUnit, setMachineSpeedUnit } = useWorkout();
+
+  return (
+    <div className="flex items-end justify-between gap-3 border-t pt-4">
+      <div>
+        <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+          Treadmill speed unit
+        </p>
+        <p className="text-muted-foreground mt-1 text-[11px]">
+          Leave this on km/h unless the belt runs faster than the speed you set.
+        </p>
+      </div>
+
+      <Tabs
+        value={machineSpeedUnit}
+        onValueChange={(value) => setMachineSpeedUnit(value as MachineSpeedUnit)}
+      >
+        <TabsList>
+          {MACHINE_SPEED_UNITS.map((unit) => (
+            <TabsTrigger key={unit} value={unit}>
+              {MACHINE_SPEED_UNIT_LABELS[unit]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+    </div>
   );
 }
 

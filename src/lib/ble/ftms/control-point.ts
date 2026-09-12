@@ -1,4 +1,9 @@
 import { ByteCursor } from "../byte-cursor";
+import {
+  DEFAULT_MACHINE_SPEED_UNIT,
+  toMachineSpeed,
+  type MachineSpeedUnit,
+} from "./speed-units";
 
 /**
  * Fitness Machine Control Point (0x2AD9).
@@ -103,9 +108,17 @@ export function pause(): Uint8Array {
   return Uint8Array.of(ControlOpCode.stopOrPause, StopOrPauseParameter.pause);
 }
 
-/** Target speed, uint16 at 0.01 km/h resolution. */
-export function setTargetSpeed(speedKph: number): Uint8Array {
-  const raw = Math.round(speedKph * 100);
+/**
+ * Target speed, uint16 at 0.01 resolution.
+ *
+ * The spec's unit is km/h; `unit` names what the machine really reads the field
+ * as, so the belt ends up at the km/h the caller asked for.
+ */
+export function setTargetSpeed(
+  speedKph: number,
+  unit: MachineSpeedUnit = DEFAULT_MACHINE_SPEED_UNIT,
+): Uint8Array {
+  const raw = Math.round(toMachineSpeed(speedKph, unit) * 100);
   if (!Number.isFinite(raw) || raw < 0 || raw > 0xffff) {
     throw new RangeError(`Target speed ${speedKph} km/h is outside the encodable range`);
   }

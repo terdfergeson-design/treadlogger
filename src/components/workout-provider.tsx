@@ -19,9 +19,11 @@ import {
   type TreadmillSnapshot,
   type TreadmillSource,
 } from "@/lib/ble/types";
+import { type MachineSpeedUnit } from "@/lib/ble/ftms/speed-units";
 import { WebBluetoothTreadmill } from "@/lib/ble/web-bluetooth-treadmill";
 import { WebBluetoothHeartRate } from "@/lib/ble/web-bluetooth-heart-rate";
 import { useBluetoothSupport } from "@/hooks/use-bluetooth-support";
+import { useMachineSpeedUnit } from "@/hooks/use-machine-speed-unit";
 import { createSimulator } from "@/lib/mock/simulator";
 import { DEFAULT_RUNNER_PROFILE } from "@/lib/mock/physiology";
 import {
@@ -74,6 +76,10 @@ interface WorkoutContextValue {
   speedRange: typeof DEFAULT_SPEED_RANGE;
   inclineRange: typeof DEFAULT_INCLINE_RANGE;
 
+  /** The unit the connected treadmill uses in its FTMS speed fields. */
+  machineSpeedUnit: MachineSpeedUnit;
+  setMachineSpeedUnit: (unit: MachineSpeedUnit) => void;
+
   maxHeartRateBpm: number;
   setMaxHeartRateBpm: (bpm: number) => void;
 
@@ -108,6 +114,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<DeviceMode>("bluetooth");
   const [sources, setSources] = useState<Sources>(() => createSources("bluetooth"));
   const [maxHeartRateBpm, setMaxHeartRateBpm] = useState(DEFAULT_RUNNER_PROFILE.maxHeartRateBpm);
+  const [machineSpeedUnit, setMachineSpeedUnit] = useMachineSpeedUnit();
   const [requestedSpeedKph, setRequestedSpeedKph] = useState(8);
   const [requestedInclinePercent, setRequestedInclinePercent] = useState(0);
   const [encodedActivity, setEncodedActivity] = useState<EncodedActivity | null>(null);
@@ -138,6 +145,12 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     recorder.setMaxHeartRate(maxHeartRateBpm);
   }, [recorder, maxHeartRateBpm]);
+
+  // The unit belongs to the machine, so it is pushed to whichever source is
+  // live, including one a mode switch has just created.
+  useEffect(() => {
+    sources.treadmill.setSpeedUnit(machineSpeedUnit);
+  }, [sources.treadmill, machineSpeedUnit]);
 
   // Sampling reads each source's live snapshot rather than the values captured by
   // this render, so a tick can never fold a stale reading into the session. The
@@ -374,6 +387,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       setTargetIncline,
       speedRange,
       inclineRange,
+      machineSpeedUnit,
+      setMachineSpeedUnit,
       maxHeartRateBpm,
       setMaxHeartRateBpm,
       startWorkout,
@@ -403,6 +418,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       setTargetIncline,
       speedRange,
       inclineRange,
+      machineSpeedUnit,
+      setMachineSpeedUnit,
       maxHeartRateBpm,
       startWorkout,
       pauseWorkout,
