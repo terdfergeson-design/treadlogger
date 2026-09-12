@@ -1,4 +1,9 @@
 import { ByteCursor } from "../byte-cursor";
+import {
+  DEFAULT_MACHINE_SPEED_UNIT,
+  fromMachineSpeed,
+  type MachineSpeedUnit,
+} from "./speed-units";
 
 /**
  * Supported Speed Range (0x2AD4) and Supported Inclination Range (0x2AD5).
@@ -21,9 +26,13 @@ export interface InclinationRange {
   incrementPercent: number;
 }
 
-/** All three fields are uint16 at 0.01 km/h. */
+/**
+ * All three fields are uint16 at 0.01, in the machine's speed unit. The bounds
+ * come back in km/h so they can drive the control directly.
+ */
 export function parseSupportedSpeedRange(
   source: DataView | ArrayBuffer | Uint8Array,
+  unit: MachineSpeedUnit = DEFAULT_MACHINE_SPEED_UNIT,
 ): SpeedRange {
   const cursor = new ByteCursor(source);
 
@@ -32,9 +41,9 @@ export function parseSupportedSpeedRange(
   }
 
   return {
-    minKph: cursor.uint16() / 100,
-    maxKph: cursor.uint16() / 100,
-    incrementKph: cursor.uint16() / 100,
+    minKph: fromMachineSpeed(cursor.uint16() / 100, unit),
+    maxKph: fromMachineSpeed(cursor.uint16() / 100, unit),
+    incrementKph: fromMachineSpeed(cursor.uint16() / 100, unit),
   };
 }
 

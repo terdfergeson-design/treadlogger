@@ -191,6 +191,11 @@ start at zero, counters that reset mid-workout, and belt movement during a pause
 ## Notes and limits
 
 - Only one BLE central can hold a treadmill at a time. Close the manufacturer's phone app first.
+- FTMS defines every speed field as km/h, but some machines put mph in them and say nothing, so the
+  belt runs a factor of 1.609 fast and its reported speed reads a factor of 1.609 slow. If the belt
+  runs faster than the speed you set, switch **Treadmill speed unit** to mph under Belt control. The
+  choice is remembered, and it is applied to the commanded target, the reported speed and the
+  machine's advertised speed range together, so the number you set and the number you get agree.
 - Treadmills vary in which FTMS fields they report. The parser handles any subset, and the app
   falls back to integrating speed when a machine does not report distance.
 - The FTMS specification labels its pace fields "kilometre per minute", but a `uint8` at 0.1

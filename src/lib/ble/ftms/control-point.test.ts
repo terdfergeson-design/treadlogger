@@ -12,6 +12,7 @@ import {
   startOrResume,
   stop,
 } from "./control-point";
+import { parseTreadmillData } from "./treadmill-data";
 
 describe("control point commands", () => {
   it("encodes the bare op codes", () => {
@@ -35,6 +36,29 @@ describe("control point commands", () => {
     expect([...setTargetInclination(7.5)]).toEqual([0x03, 0x4b, 0x00]);
     // -2.5 % -> -25 -> 0xFFE7.
     expect([...setTargetInclination(-2.5)]).toEqual([0x03, 0xe7, 0xff]);
+  });
+
+  it("encodes target speed in the machine's unit when that unit is mph", () => {
+    // The runner asks for 3.5 km/h. A machine that reads the field as mph has
+    // to be sent 2.17 mph -> 217 -> 0x00D9 to put the belt at 3.5 km/h.
+    expect([...setTargetSpeed(3.5, "mph")]).toEqual([0x02, 0xd9, 0x00]);
+
+    // Sending the km/h number unconverted is the reported bug: the machine
+    // reads 3.50 mph and runs the belt at 5.63 km/h.
+    expect([...setTargetSpeed(3.5)]).toEqual([0x02, 0x5e, 0x01]);
+  });
+
+  it("survives a round trip through an mph machine within the 0.01 mph quantum", () => {
+    for (const speedKph of [1, 3.5, 8, 12.5, 16]) {
+      const raw = new DataView(setTargetSpeed(speedKph, "mph").buffer).getUint16(1, true);
+      // What the machine would report back for the speed it was just given.
+      const reported = parseTreadmillData(
+        bytesToDataView([0x00, 0x00, raw & 0xff, raw >> 8]),
+        "mph",
+      );
+
+      expect(reported.speedKph).toBeCloseTo(speedKph, 1);
+    }
   });
 
   it("refuses values that cannot be encoded", () => {

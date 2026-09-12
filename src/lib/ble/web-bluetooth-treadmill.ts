@@ -12,6 +12,10 @@ import {
 import { parseFitnessMachineFeature } from "./ftms/features";
 import { parseSupportedInclinationRange, parseSupportedSpeedRange } from "./ftms/ranges";
 import { parseFitnessMachineStatus } from "./ftms/status";
+import {
+  DEFAULT_MACHINE_SPEED_UNIT,
+  type MachineSpeedUnit,
+} from "./ftms/speed-units";
 import { parseTreadmillData } from "./ftms/treadmill-data";
 import { emptyTreadmillSnapshot, TreadmillSource, type TreadmillSnapshot } from "./types";
 import { DEVICE_INFORMATION_SERVICE, FITNESS_MACHINE_SERVICE, FTMS } from "./uuids";
@@ -44,6 +48,13 @@ export class WebBluetoothTreadmill extends TreadmillSource {
   private device?: BluetoothDevice;
   private controlPoint?: BluetoothRemoteGATTCharacteristic;
 
+  /**
+   * Supported Speed Range as the machine sent it. Kept so the bounds can be
+   * re-derived when the machine's speed unit is corrected mid-session, which is
+   * cheaper and more reliable than re-reading the characteristic.
+   */
+  private rawSpeedRange?: Uint8Array;
+
   /** Tail of the command queue, used to serialize control-point writes. */
   private commandChain: Promise<unknown> = Promise.resolve();
 
@@ -54,13 +65,21 @@ export class WebBluetoothTreadmill extends TreadmillSource {
     timer: ReturnType<typeof setTimeout>;
   };
 
-  constructor() {
+  constructor(speedUnit: MachineSpeedUnit = DEFAULT_MACHINE_SPEED_UNIT) {
     // Deliberately does not probe for Web Bluetooth here. The store is created
     // during server rendering too, and branching on `navigator` would give the
     // server and the client different first snapshots. Support is reported by the
     // UI after mount, and a connect attempt on an unsupported browser reports it
     // again.
     super(emptyTreadmillSnapshot("bluetooth"));
+    this.speedUnit = speedUnit;
+  }
+
+  override setSpeedUnit(unit: MachineSpeedUnit): void {
+    super.setSpeedUnit(unit);
+    if (this.rawSpeedRange) {
+      this.patch({ speedRange: parseSupportedSpeedRange(this.rawSpeedRange, unit) });
+    }
   }
 
   async connect(): Promise<void> {
@@ -121,6 +140,7 @@ export class WebBluetoothTreadmill extends TreadmillSource {
     } finally {
       this.device = undefined;
       this.controlPoint = undefined;
+      this.rawSpeedRange = undefined;
       this.replaceSnapshot(emptyTreadmillSnapshot("bluetooth"));
     }
   }
@@ -149,7 +169,10 @@ export class WebBluetoothTreadmill extends TreadmillSource {
   }
 
   async setTargetSpeed(speedKph: number): Promise<void> {
-    await this.command(ControlOpCode.setTargetSpeed, setTargetSpeed(speedKph));
+    await this.command(
+      ControlOpCode.setTargetSpeed,
+      setTargetSpeed(speedKph, this.speedUnit),
+    );
   }
 
   async setTargetIncline(inclinePercent: number): Promise<void> {
@@ -163,7 +186,10 @@ export class WebBluetoothTreadmill extends TreadmillSource {
       if (!value) return;
 
       try {
-        this.patch({ data: parseTreadmillData(value), lastUpdateAt: Date.now() });
+        this.patch({
+          data: parseTreadmillData(value, this.speedUnit),
+          lastUpdateAt: Date.now(),
+        });
       } catch (error) {
         console.warn("Ignoring malformed Treadmill Data notification", error);
       }
@@ -181,7 +207,7 @@ export class WebBluetoothTreadmill extends TreadmillSource {
         if (!value) return;
 
         try {
-          const status = parseFitnessMachineStatus(value);
+          const status = parseFitnessMachineStatus(value, this.speedUnit);
           this.patch({
             lastMessage: status.message,
             ...(status.state ? { machineState: status.state } : {}),
@@ -215,7 +241,10 @@ export class WebBluetoothTreadmill extends TreadmillSource {
       this.patch({ features: parseFitnessMachineFeature(value) });
     });
     await this.tryRead(service, FTMS.supportedSpeedRange, (value) => {
-      this.patch({ speedRange: parseSupportedSpeedRange(value) });
+      this.rawSpeedRange = new Uint8Array(
+        value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength),
+      );
+      this.patch({ speedRange: parseSupportedSpeedRange(value, this.speedUnit) });
     });
     await this.tryRead(service, FTMS.supportedInclinationRange, (value) => {
       this.patch({ inclineRange: parseSupportedInclinationRange(value) });

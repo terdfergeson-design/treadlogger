@@ -13,6 +13,18 @@ describe("parseSupportedSpeedRange", () => {
     expect(range).toEqual({ minKph: 0.5, maxKph: 20, incrementKph: 0.1 });
   });
 
+  it("converts the bounds when the machine's unit is mph", () => {
+    // Same bytes read as 0.5 / 20 / 0.1 mph, so the control gets km/h bounds.
+    const range = parseSupportedSpeedRange(
+      bytesToDataView([0x32, 0x00, 0xd0, 0x07, 0x0a, 0x00]),
+      "mph",
+    );
+
+    expect(range.minKph).toBeCloseTo(0.805, 3);
+    expect(range.maxKph).toBeCloseTo(32.187, 3);
+    expect(range.incrementKph).toBeCloseTo(0.161, 3);
+  });
+
   it("rejects a short payload", () => {
     expect(() => parseSupportedSpeedRange(bytesToDataView([0x32, 0x00]))).toThrow(/6 bytes/);
   });
@@ -90,6 +102,13 @@ describe("parseFitnessMachineStatus", () => {
 
     const incline = parseFitnessMachineStatus(bytesToDataView([0x06, 0xe7, 0xff]));
     expect(incline.targetInclinePercent).toBeCloseTo(-2.5, 6);
+  });
+
+  it("reads a changed target speed in the machine's unit", () => {
+    const speed = parseFitnessMachineStatus(bytesToDataView([0x05, 0xe2, 0x04]), "mph");
+
+    expect(speed.targetSpeedKph).toBeCloseTo(20.117, 3);
+    expect(speed.message).toMatch(/20\.1 km\/h/);
   });
 
   it("flags a loss of control permission", () => {

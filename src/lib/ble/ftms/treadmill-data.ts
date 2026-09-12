@@ -1,4 +1,9 @@
 import { ByteCursor } from "../byte-cursor";
+import {
+  DEFAULT_MACHINE_SPEED_UNIT,
+  fromMachineSpeed,
+  type MachineSpeedUnit,
+} from "./speed-units";
 
 /**
  * Treadmill Data characteristic (0x2ACD) of the Fitness Machine Service.
@@ -74,8 +79,15 @@ export interface TreadmillData {
  *
  * Fields the peripheral omitted, and fields it explicitly marked unavailable,
  * both come back `undefined`.
+ *
+ * `unit` names the unit the machine puts in the speed fields; the speeds handed
+ * back are km/h either way. The pace fields are left as the machine sent them,
+ * since the dashboard derives pace from speed.
  */
-export function parseTreadmillData(source: DataView | ArrayBuffer | Uint8Array): TreadmillData {
+export function parseTreadmillData(
+  source: DataView | ArrayBuffer | Uint8Array,
+  unit: MachineSpeedUnit = DEFAULT_MACHINE_SPEED_UNIT,
+): TreadmillData {
   const cursor = new ByteCursor(source);
 
   if (!cursor.has(2)) {
@@ -87,11 +99,11 @@ export function parseTreadmillData(source: DataView | ArrayBuffer | Uint8Array):
   const present = (flag: number) => (flags & flag) !== 0;
 
   if (!present(TreadmillDataFlag.moreData) && cursor.has(2)) {
-    data.speedKph = cursor.uint16() / 100;
+    data.speedKph = fromMachineSpeed(cursor.uint16() / 100, unit);
   }
 
   if (present(TreadmillDataFlag.averageSpeed) && cursor.has(2)) {
-    data.averageSpeedKph = cursor.uint16() / 100;
+    data.averageSpeedKph = fromMachineSpeed(cursor.uint16() / 100, unit);
   }
 
   if (present(TreadmillDataFlag.totalDistance) && cursor.has(3)) {

@@ -1,6 +1,7 @@
 import type { FeatureReport } from "./ftms/features";
 import type { InclinationRange, SpeedRange } from "./ftms/ranges";
 import type { MachineState } from "./ftms/status";
+import { DEFAULT_MACHINE_SPEED_UNIT, type MachineSpeedUnit } from "./ftms/speed-units";
 import type { TreadmillData } from "./ftms/treadmill-data";
 import type { HeartRateMeasurement } from "./hr/measurement";
 import { ObservableStore } from "./observable-store";
@@ -72,6 +73,18 @@ export const emptyHeartRateSnapshot = (kind: SourceKind): HeartRateSnapshot => (
  * simulator. Nothing above this interface knows which one it holds.
  */
 export abstract class TreadmillSource extends ObservableStore<TreadmillSnapshot> {
+  /** The unit this machine puts in the FTMS speed fields. */
+  protected speedUnit: MachineSpeedUnit = DEFAULT_MACHINE_SPEED_UNIT;
+
+  /**
+   * Declares the machine's speed unit. Safe to call while connected: the
+   * bounds already read from the machine are re-derived, so the control does
+   * not have to wait for a reconnect to show the corrected range.
+   */
+  setSpeedUnit(unit: MachineSpeedUnit): void {
+    this.speedUnit = unit;
+  }
+
   abstract connect(): Promise<void>;
   abstract disconnect(): Promise<void>;
   /** Asks the machine for write access. Required before any other command. */
