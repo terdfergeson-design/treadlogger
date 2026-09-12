@@ -75,6 +75,23 @@ function decode(bytes: Uint8Array) {
   return messages;
 }
 
+/** Asserts a message collection is present and narrows away its optionality. */
+function present<T>(collection: T[] | undefined, name: string): T[] {
+  if (!collection) throw new Error(`Expected the file to contain ${name} messages`);
+  return collection;
+}
+
+/**
+ * FIT timestamps decode as a Date, and the profile type also admits raw seconds
+ * and the sentinel "min". Only a real date is meaningful here.
+ */
+function millis(timestamp: number | Date | string | undefined): number {
+  if (!(timestamp instanceof Date)) {
+    throw new Error(`Expected a decoded Date timestamp but received ${String(timestamp)}`);
+  }
+  return timestamp.getTime();
+}
+
 describe("encodeFitActivity", () => {
   it("produces a file that decodes with valid framing and CRCs", () => {
     const bytes = encodeFitActivity(buildInput());
@@ -90,29 +107,33 @@ describe("encodeFitActivity", () => {
   it("writes a file_id that marks the file as an activity", () => {
     const messages = decode(encodeFitActivity(buildInput()));
 
-    expect(messages.fileIdMesgs).toHaveLength(1);
-    expect(messages.fileIdMesgs[0]).toMatchObject({
+    const fileIds = present(messages.fileIdMesgs, "file_id");
+
+    expect(fileIds).toHaveLength(1);
+    expect(fileIds[0]).toMatchObject({
       type: "activity",
       manufacturer: "development",
       serialNumber: 20260115,
     });
-    expect(new Date(messages.fileIdMesgs[0].timeCreated).getTime()).toBe(START_MS);
+    expect(millis(fileIds[0].timeCreated)).toBe(START_MS);
   });
 
   it("round-trips every record field within FIT's stored resolution", () => {
     const samples = buildSamples(30);
     const messages = decode(encodeFitActivity(buildInput({ samples })));
 
-    expect(messages.recordMesgs).toHaveLength(samples.length);
+    const records = present(messages.recordMesgs, "record");
+
+    expect(records).toHaveLength(samples.length);
 
     samples.forEach((sample, index) => {
-      const record = messages.recordMesgs[index];
+      const record = records[index];
 
-      expect(new Date(record.timestamp).getTime()).toBe(sample.timestamp);
+      expect(millis(record.timestamp)).toBe(sample.timestamp);
       // distance is stored at 1/100 m, speed at 1/1000 m/s, grade at 1/100 %.
-      expect(record.distance).toBeCloseTo(sample.distanceM, 2);
-      expect(record.speed).toBeCloseTo(sample.speedKph / 3.6, 3);
-      expect(record.grade).toBeCloseTo(sample.inclinePercent!, 2);
+      expect(record.distance!).toBeCloseTo(sample.distanceM, 2);
+      expect(record.speed!).toBeCloseTo(sample.speedKph / 3.6, 3);
+      expect(record.grade!).toBeCloseTo(sample.inclinePercent!, 2);
       expect(record.heartRate).toBe(sample.heartRateBpm);
     });
   });
@@ -121,8 +142,10 @@ describe("encodeFitActivity", () => {
     const input = buildInput();
     const messages = decode(encodeFitActivity(input));
 
-    expect(messages.sessionMesgs).toHaveLength(1);
-    const session = messages.sessionMesgs[0];
+    const sessions = present(messages.sessionMesgs, "session");
+
+    expect(sessions).toHaveLength(1);
+    const session = sessions[0];
 
     expect(session).toMatchObject({
       sport: "running",
@@ -135,12 +158,12 @@ describe("encodeFitActivity", () => {
       totalAscent: 3,
     });
 
-    expect(new Date(session.startTime).getTime()).toBe(START_MS);
-    expect(session.totalTimerTime).toBeCloseTo(input.timerTimeS, 3);
-    expect(session.totalElapsedTime).toBeCloseTo(input.totalElapsedTimeS, 3);
-    expect(session.totalDistance).toBeCloseTo(input.totalDistanceM, 2);
-    expect(session.avgSpeed).toBeCloseTo(input.avgSpeedKph / 3.6, 3);
-    expect(session.maxSpeed).toBeCloseTo(input.maxSpeedKph / 3.6, 3);
+    expect(millis(session.startTime)).toBe(START_MS);
+    expect(session.totalTimerTime!).toBeCloseTo(input.timerTimeS, 3);
+    expect(session.totalElapsedTime!).toBeCloseTo(input.totalElapsedTimeS, 3);
+    expect(session.totalDistance!).toBeCloseTo(input.totalDistanceM, 2);
+    expect(session.avgSpeed!).toBeCloseTo(input.avgSpeedKph / 3.6, 3);
+    expect(session.maxSpeed!).toBeCloseTo(input.maxSpeedKph / 3.6, 3);
     // Heart rate is a uint8 in FIT, so the average is rounded on the way in.
     expect(session.avgHeartRate).toBe(135);
     expect(session.maxHeartRate).toBe(139);
@@ -151,46 +174,53 @@ describe("encodeFitActivity", () => {
     const input = buildInput();
     const messages = decode(encodeFitActivity(input));
 
-    expect(messages.lapMesgs).toHaveLength(1);
-    expect(messages.lapMesgs[0]).toMatchObject({
+    const laps = present(messages.lapMesgs, "lap");
+
+    expect(laps).toHaveLength(1);
+    expect(laps[0]).toMatchObject({
       messageIndex: 0,
       event: "lap",
       eventType: "stop",
       lapTrigger: "sessionEnd",
       intensity: "active",
     });
-    expect(messages.lapMesgs[0].totalDistance).toBeCloseTo(input.totalDistanceM, 2);
+    expect(laps[0].totalDistance!).toBeCloseTo(input.totalDistanceM, 2);
   });
 
   it("closes the file with an activity message", () => {
     const input = buildInput();
     const messages = decode(encodeFitActivity(input));
 
-    expect(messages.activityMesgs).toHaveLength(1);
-    expect(messages.activityMesgs[0]).toMatchObject({
+    const activities = present(messages.activityMesgs, "activity");
+
+    expect(activities).toHaveLength(1);
+    expect(activities[0]).toMatchObject({
       numSessions: 1,
       type: "manual",
       event: "activity",
       eventType: "stop",
     });
-    expect(messages.activityMesgs[0].totalTimerTime).toBeCloseTo(input.timerTimeS, 3);
+    expect(activities[0].totalTimerTime!).toBeCloseTo(input.timerTimeS, 3);
   });
 
   it("brackets the records with timer start and stop events", () => {
     const messages = decode(encodeFitActivity(buildInput()));
 
-    expect(messages.eventMesgs).toHaveLength(2);
-    expect(messages.eventMesgs[0]).toMatchObject({ event: "timer", eventType: "start" });
-    expect(messages.eventMesgs[1]).toMatchObject({ event: "timer", eventType: "stopAll" });
+    const events = present(messages.eventMesgs, "event");
+
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({ event: "timer", eventType: "start" });
+    expect(events[1]).toMatchObject({ event: "timer", eventType: "stopAll" });
   });
 
   it("records both Bluetooth devices alongside the app itself", () => {
     const messages = decode(encodeFitActivity(buildInput()));
-    const descriptors = messages.deviceInfoMesgs.map((mesg: { descriptor?: string }) => mesg.descriptor);
+    const devices = present(messages.deviceInfoMesgs, "device_info");
+    const descriptors = devices.map((device) => device.descriptor);
 
     expect(descriptors).toContain("THERUN T15");
     expect(descriptors).toContain("Polar H10");
-    expect(messages.deviceInfoMesgs[0]).toMatchObject({
+    expect(devices[0]).toMatchObject({
       deviceIndex: "creator",
       sourceType: "local",
     });
@@ -205,10 +235,12 @@ describe("encodeFitActivity", () => {
 
     const messages = decode(encodeFitActivity(buildInput({ samples })));
 
-    expect(messages.recordMesgs).toHaveLength(2);
+    const records = present(messages.recordMesgs, "record");
+
+    expect(records).toHaveLength(2);
     // The later reading in a second wins.
-    expect(messages.recordMesgs[0].distance).toBeCloseTo(3, 2);
-    expect(messages.recordMesgs[1].distance).toBeCloseTo(5, 2);
+    expect(records[0].distance!).toBeCloseTo(3, 2);
+    expect(records[1].distance!).toBeCloseTo(5, 2);
   });
 
   it("orders records chronologically even when samples arrive out of order", () => {
@@ -219,8 +251,8 @@ describe("encodeFitActivity", () => {
     ];
 
     const messages = decode(encodeFitActivity(buildInput({ samples })));
-    const timestamps = messages.recordMesgs.map((record: { timestamp: string }) =>
-      new Date(record.timestamp).getTime(),
+    const timestamps = present(messages.recordMesgs, "record").map((record) =>
+      millis(record.timestamp),
     );
 
     expect(timestamps).toEqual([START_MS + 1_000, START_MS + 2_000, START_MS + 3_000]);
@@ -238,17 +270,19 @@ describe("encodeFitActivity", () => {
       ),
     );
 
-    expect(messages.recordMesgs[0].heartRate).toBeUndefined();
-    expect(messages.recordMesgs[1].heartRate).toBe(128);
-    expect(messages.sessionMesgs[0].avgHeartRate).toBeUndefined();
+    const records = present(messages.recordMesgs, "record");
+
+    expect(records[0].heartRate).toBeUndefined();
+    expect(records[1].heartRate).toBe(128);
+    expect(present(messages.sessionMesgs, "session")[0].avgHeartRate).toBeUndefined();
   });
 
   it("still writes a decodable file for a workout with no samples", () => {
     const messages = decode(encodeFitActivity(buildInput({ samples: [] })));
 
     expect(messages.recordMesgs ?? []).toHaveLength(0);
-    expect(messages.sessionMesgs).toHaveLength(1);
-    expect(messages.activityMesgs).toHaveLength(1);
+    expect(present(messages.sessionMesgs, "session")).toHaveLength(1);
+    expect(present(messages.activityMesgs, "activity")).toHaveLength(1);
   });
 });
 

@@ -55,10 +55,12 @@ export class WebBluetoothTreadmill extends TreadmillSource {
   };
 
   constructor() {
+    // Deliberately does not probe for Web Bluetooth here. The store is created
+    // during server rendering too, and branching on `navigator` would give the
+    // server and the client different first snapshots. Support is reported by the
+    // UI after mount, and a connect attempt on an unsupported browser reports it
+    // again.
     super(emptyTreadmillSnapshot("bluetooth"));
-    if (!isWebBluetoothAvailable()) {
-      this.patch({ connection: "unsupported" });
-    }
   }
 
   async connect(): Promise<void> {
@@ -119,10 +121,7 @@ export class WebBluetoothTreadmill extends TreadmillSource {
     } finally {
       this.device = undefined;
       this.controlPoint = undefined;
-      this.replaceSnapshot({
-        ...emptyTreadmillSnapshot("bluetooth"),
-        connection: isWebBluetoothAvailable() ? "idle" : "unsupported",
-      });
+      this.replaceSnapshot(emptyTreadmillSnapshot("bluetooth"));
     }
   }
 

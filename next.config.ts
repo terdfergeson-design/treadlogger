@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Next.js otherwise writes AGENTS.md and CLAUDE.md into the repo root on every
+  // dev start, which is not part of this project.
+  agentRules: false,
 };
 
 export default nextConfig;

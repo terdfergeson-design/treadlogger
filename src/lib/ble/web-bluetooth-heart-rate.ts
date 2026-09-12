@@ -13,10 +13,9 @@ export class WebBluetoothHeartRate extends HeartRateSource {
   private device?: BluetoothDevice;
 
   constructor() {
+    // See WebBluetoothTreadmill: support is not probed here so that the first
+    // snapshot matches between server rendering and hydration.
     super(emptyHeartRateSnapshot("bluetooth"));
-    if (!isWebBluetoothAvailable()) {
-      this.patch({ connection: "unsupported" });
-    }
   }
 
   async connect(): Promise<void> {
@@ -86,10 +85,7 @@ export class WebBluetoothHeartRate extends HeartRateSource {
       if (this.device?.gatt?.connected) this.device.gatt.disconnect();
     } finally {
       this.device = undefined;
-      this.replaceSnapshot({
-        ...emptyHeartRateSnapshot("bluetooth"),
-        connection: isWebBluetoothAvailable() ? "idle" : "unsupported",
-      });
+      this.replaceSnapshot(emptyHeartRateSnapshot("bluetooth"));
     }
   }
 

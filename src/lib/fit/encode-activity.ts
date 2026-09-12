@@ -1,4 +1,15 @@
 import { Encoder, Profile } from "@garmin/fitsdk";
+import type {
+  ActivityMesg,
+  DeviceInfoMesg,
+  Encodable,
+  EventMesg,
+  FileCreatorMesg,
+  FileIdMesg,
+  LapMesg,
+  RecordMesg,
+  SessionMesg,
+} from "@garmin/fitsdk";
 import type { WorkoutSample, WorkoutSnapshot } from "../workout/session";
 
 /**
@@ -70,90 +81,15 @@ function toRecordsPerSecond(samples: WorkoutSample[]): WorkoutSample[] {
   return [...bySecond.entries()].sort(([a], [b]) => a - b).map(([, sample]) => sample);
 }
 
-export function encodeFitActivity(input: FitActivityInput): Uint8Array {
-  const encoder = new Encoder();
-  const records = toRecordsPerSecond(input.samples);
-
-  encoder.writeMesg({
-    mesgNum: Profile.MesgNum.FILE_ID,
-    type: "activity",
-    // 255 / "development" is the manufacturer id reserved for software without a
-    // registered Garmin id, which is the honest choice for this app.
-    manufacturer: "development",
-    product: APP_PRODUCT_ID,
-    serialNumber: input.serialNumber ?? 1,
-    timeCreated: input.startedAt,
-  });
-
-  encoder.writeMesg({
-    mesgNum: Profile.MesgNum.FILE_CREATOR,
-    softwareVersion: APP_SOFTWARE_VERSION,
-  });
-
-  encoder.writeMesg({
-    mesgNum: Profile.MesgNum.DEVICE_INFO,
-    timestamp: input.startedAt,
-    deviceIndex: "creator",
-    manufacturer: "development",
-    product: APP_PRODUCT_ID,
-    productName: input.simulated ? `${APP_PRODUCT_NAME} (simulator)` : APP_PRODUCT_NAME,
-    softwareVersion: APP_SOFTWARE_VERSION,
-    sourceType: "local",
-    serialNumber: input.serialNumber ?? 1,
-  });
-
-  if (input.treadmillName) {
-    encoder.writeMesg({
-      mesgNum: Profile.MesgNum.DEVICE_INFO,
-      timestamp: input.startedAt,
-      deviceIndex: 1,
-      sourceType: "bluetoothLowEnergy",
-      descriptor: input.treadmillName,
-    });
-  }
-
-  if (input.heartRateMonitorName) {
-    encoder.writeMesg({
-      mesgNum: Profile.MesgNum.DEVICE_INFO,
-      timestamp: input.startedAt,
-      deviceIndex: 2,
-      sourceType: "bluetoothLowEnergy",
-      bleDeviceType: "heartRate",
-      descriptor: input.heartRateMonitorName,
-    });
-  }
-
-  // Timer events bracket the records and tell a reader where the clock ran.
-  encoder.writeMesg({
-    mesgNum: Profile.MesgNum.EVENT,
-    timestamp: input.startedAt,
-    event: "timer",
-    eventType: "start",
-  });
-
-  for (const sample of records) {
-    encoder.writeMesg({
-      mesgNum: Profile.MesgNum.RECORD,
-      timestamp: new Date(sample.timestamp),
-      distance: sample.distanceM,
-      speed: sample.speedKph * KPH_TO_MPS,
-      ...(sample.heartRateBpm !== undefined
-        ? { heartRate: asInteger(sample.heartRateBpm) }
-        : {}),
-      // FIT calls treadmill incline "grade", in percent.
-      ...(sample.inclinePercent !== undefined ? { grade: sample.inclinePercent } : {}),
-      ...(sample.cadenceSpm !== undefined ? { cadence: asInteger(sample.cadenceSpm) } : {}),
-    });
-  }
-
-  encoder.writeMesg({
-    mesgNum: Profile.MesgNum.EVENT,
-    timestamp: input.endedAt,
-    event: "timer",
-    eventType: "stopAll",
-  });
-
-  const summary = {
+/**
+ * Totals shared by the lap and the session.
+ *
+ * Both messages summarise the same single-lap workout, so the fields are built
+ * once. Enum values are kept as literals so they type-check against the FIT
+ * profile's union types.
+ */
+function summaryFields(input: FitActivityInput) {
+  return {
     startTime: input.startedAt,
     timestamp: input.endedAt,
     totalElapsedTime: input.totalElapsedTimeS,
@@ -163,32 +99,118 @@ export function encodeFitActivity(input: FitActivityInput): Uint8Array {
     totalAscent: asInteger(input.totalAscentM),
     avgSpeed: input.avgSpeedKph * KPH_TO_MPS,
     maxSpeed: input.maxSpeedKph * KPH_TO_MPS,
-    sport: "running",
-    subSport: "treadmill",
-    ...(input.avgHeartRateBpm !== undefined
-      ? { avgHeartRate: asInteger(input.avgHeartRateBpm) }
-      : {}),
-    ...(input.maxHeartRateBpm !== undefined
-      ? { maxHeartRate: asInteger(input.maxHeartRateBpm) }
-      : {}),
-    ...(input.minHeartRateBpm !== undefined
-      ? { minHeartRate: asInteger(input.minHeartRateBpm) }
-      : {}),
-    ...(input.maxInclinePercent !== undefined ? { maxPosGrade: input.maxInclinePercent } : {}),
+    sport: "running" as const,
+    subSport: "treadmill" as const,
+    avgHeartRate: asInteger(input.avgHeartRateBpm),
+    maxHeartRate: asInteger(input.maxHeartRateBpm),
+    minHeartRate: asInteger(input.minHeartRateBpm),
+    maxPosGrade: input.maxInclinePercent,
   };
+}
+
+export function encodeFitActivity(input: FitActivityInput): Uint8Array {
+  const encoder = new Encoder();
+  const records = toRecordsPerSecond(input.samples);
+  const serialNumber = input.serialNumber ?? 1;
+
+  const fileId: Encodable<FileIdMesg> = {
+    mesgNum: Profile.MesgNum.FILE_ID,
+    type: "activity",
+    // 255 / "development" is the manufacturer id reserved for software without a
+    // registered Garmin id, which is the honest choice for this app.
+    manufacturer: "development",
+    product: APP_PRODUCT_ID,
+    serialNumber,
+    timeCreated: input.startedAt,
+  };
+  encoder.writeMesg(fileId);
+
+  const fileCreator: Encodable<FileCreatorMesg> = {
+    mesgNum: Profile.MesgNum.FILE_CREATOR,
+    softwareVersion: APP_SOFTWARE_VERSION,
+  };
+  encoder.writeMesg(fileCreator);
+
+  const creator: Encodable<DeviceInfoMesg> = {
+    mesgNum: Profile.MesgNum.DEVICE_INFO,
+    timestamp: input.startedAt,
+    deviceIndex: "creator",
+    manufacturer: "development",
+    product: APP_PRODUCT_ID,
+    productName: input.simulated ? `${APP_PRODUCT_NAME} (simulator)` : APP_PRODUCT_NAME,
+    softwareVersion: APP_SOFTWARE_VERSION,
+    sourceType: "local",
+    serialNumber,
+  };
+  encoder.writeMesg(creator);
+
+  if (input.treadmillName) {
+    const treadmillDevice: Encodable<DeviceInfoMesg> = {
+      mesgNum: Profile.MesgNum.DEVICE_INFO,
+      timestamp: input.startedAt,
+      deviceIndex: 1,
+      sourceType: "bluetoothLowEnergy",
+      descriptor: input.treadmillName,
+    };
+    encoder.writeMesg(treadmillDevice);
+  }
+
+  if (input.heartRateMonitorName) {
+    const strapDevice: Encodable<DeviceInfoMesg> = {
+      mesgNum: Profile.MesgNum.DEVICE_INFO,
+      timestamp: input.startedAt,
+      deviceIndex: 2,
+      sourceType: "bluetoothLowEnergy",
+      bleDeviceType: "heartRate",
+      descriptor: input.heartRateMonitorName,
+    };
+    encoder.writeMesg(strapDevice);
+  }
+
+  // Timer events bracket the records and tell a reader where the clock ran.
+  const timerStart: Encodable<EventMesg> = {
+    mesgNum: Profile.MesgNum.EVENT,
+    timestamp: input.startedAt,
+    event: "timer",
+    eventType: "start",
+  };
+  encoder.writeMesg(timerStart);
+
+  for (const sample of records) {
+    const record: Encodable<RecordMesg> = {
+      mesgNum: Profile.MesgNum.RECORD,
+      timestamp: new Date(sample.timestamp),
+      distance: sample.distanceM,
+      speed: sample.speedKph * KPH_TO_MPS,
+      heartRate: asInteger(sample.heartRateBpm),
+      // FIT calls treadmill incline "grade", in percent.
+      grade: sample.inclinePercent,
+      cadence: asInteger(sample.cadenceSpm),
+    };
+    encoder.writeMesg(record);
+  }
+
+  const timerStop: Encodable<EventMesg> = {
+    mesgNum: Profile.MesgNum.EVENT,
+    timestamp: input.endedAt,
+    event: "timer",
+    eventType: "stopAll",
+  };
+  encoder.writeMesg(timerStop);
 
   // A single lap covering the whole workout. Readers expect at least one.
-  encoder.writeMesg({
+  const lap: Encodable<LapMesg> = {
     mesgNum: Profile.MesgNum.LAP,
     messageIndex: 0,
     event: "lap",
     eventType: "stop",
     lapTrigger: "sessionEnd",
     intensity: "active",
-    ...summary,
-  });
+    ...summaryFields(input),
+  };
+  encoder.writeMesg(lap);
 
-  encoder.writeMesg({
+  const session: Encodable<SessionMesg> = {
     mesgNum: Profile.MesgNum.SESSION,
     messageIndex: 0,
     event: "session",
@@ -196,10 +218,11 @@ export function encodeFitActivity(input: FitActivityInput): Uint8Array {
     trigger: "activityEnd",
     firstLapIndex: 0,
     numLaps: 1,
-    ...summary,
-  });
+    ...summaryFields(input),
+  };
+  encoder.writeMesg(session);
 
-  encoder.writeMesg({
+  const activity: Encodable<ActivityMesg> = {
     mesgNum: Profile.MesgNum.ACTIVITY,
     timestamp: input.endedAt,
     totalTimerTime: input.timerTimeS,
@@ -208,7 +231,8 @@ export function encodeFitActivity(input: FitActivityInput): Uint8Array {
     event: "activity",
     eventType: "stop",
     localTimestamp: toLocalTimestamp(input.endedAt),
-  });
+  };
+  encoder.writeMesg(activity);
 
   return encoder.close();
 }
