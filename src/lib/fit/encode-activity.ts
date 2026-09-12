@@ -62,6 +62,13 @@ export interface FitActivityInput {
   serialNumber?: number;
 }
 
+/**
+ * FIT stores speed as metres per second (profile scale 1000). That is the
+ * format's required unit — Garmin Connect, Strava and every other importer
+ * expect m/s — so the encoder always writes m/s derived from the app's
+ * internal km/h. The mph/km/h setting is a display choice and must not be
+ * written into the file, or a 3.2 mph run would be read as 3.2 m/s (11.5 km/h).
+ */
 const KPH_TO_MPS = 1 / 3.6;
 
 /** FIT stores heart rate and calories as integers; round rather than truncate. */

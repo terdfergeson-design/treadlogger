@@ -7,11 +7,18 @@ import { useWorkout } from "@/components/workout-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatIncline, formatSpeed } from "@/lib/format";
+import { formatIncline, formatSpeedRange, formatSpeedWithUnit } from "@/lib/format";
 
 export function TreadmillCard() {
-  const { treadmill, connectTreadmill, disconnectTreadmill, mode, bluetoothSupported, busy } =
-    useWorkout();
+  const {
+    treadmill,
+    connectTreadmill,
+    disconnectTreadmill,
+    mode,
+    bluetoothSupported,
+    busy,
+    machineSpeedUnit,
+  } = useWorkout();
 
   const connected = treadmill.connection === "connected";
   const connecting = treadmill.connection === "connecting" || treadmill.connection === "requesting";
@@ -43,7 +50,10 @@ export function TreadmillCard() {
           <>
             <p className="truncate text-sm font-medium">{treadmill.deviceName}</p>
             <div className="grid grid-cols-2 gap-2">
-              <MiniStat label="Belt speed" value={`${formatSpeed(treadmill.data.speedKph)} km/h`} />
+              <MiniStat
+                label="Belt speed"
+                value={formatSpeedWithUnit(treadmill.data.speedKph, machineSpeedUnit)}
+              />
               <MiniStat
                 label="Incline"
                 value={`${formatIncline(treadmill.data.inclinationPercent)} %`}
@@ -51,8 +61,11 @@ export function TreadmillCard() {
             </div>
             {treadmill.speedRange ? (
               <p className="text-muted-foreground text-xs">
-                Supports {treadmill.speedRange.minKph.toFixed(1)}–
-                {treadmill.speedRange.maxKph.toFixed(1)} km/h
+                Supports {formatSpeedRange(
+                  treadmill.speedRange.minKph,
+                  treadmill.speedRange.maxKph,
+                  machineSpeedUnit,
+                )}
                 {treadmill.inclineRange
                   ? ` and ${treadmill.inclineRange.minPercent.toFixed(0)}–${treadmill.inclineRange.maxPercent.toFixed(0)} % incline`
                   : ""}

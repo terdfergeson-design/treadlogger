@@ -117,7 +117,8 @@ function MachineSpeedUnitSetting() {
           Treadmill speed unit
         </p>
         <p className="text-muted-foreground mt-1 text-[11px]">
-          Leave this on km/h unless the belt runs faster than the speed you set.
+          Match the unit on the treadmill console. Speeds everywhere in the app
+          follow this, including the range and the live readout.
         </p>
       </div>
 

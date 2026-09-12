@@ -108,7 +108,7 @@ describe("parseFitnessMachineStatus", () => {
     const speed = parseFitnessMachineStatus(bytesToDataView([0x05, 0xe2, 0x04]), "mph");
 
     expect(speed.targetSpeedKph).toBeCloseTo(20.117, 3);
-    expect(speed.message).toMatch(/20\.1 km\/h/);
+    expect(speed.message).toMatch(/12\.5 mph/);
   });
 
   it("flags a loss of control permission", () => {

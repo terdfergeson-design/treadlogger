@@ -74,6 +74,29 @@ export function formatPace(
     : `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
+/** Value and unit together, so a number can never be labelled with the other unit. */
+export function formatSpeedWithUnit(
+  speedKph: number | undefined,
+  unit: MachineSpeedUnit = "kph",
+): string {
+  return `${formatSpeed(speedKph, unit)} ${speedUnitLabel(unit)}`;
+}
+
+export function formatPaceWithUnit(
+  minutesPerKm: number | undefined,
+  unit: MachineSpeedUnit = "kph",
+): string {
+  return `${formatPace(minutesPerKm, unit)} ${paceUnitLabel(unit)}`;
+}
+
+export function formatSpeedRange(
+  minKph: number,
+  maxKph: number,
+  unit: MachineSpeedUnit = "kph",
+): string {
+  return `${formatSpeed(minKph, unit)}–${formatSpeed(maxKph, unit)} ${speedUnitLabel(unit)}`;
+}
+
 export function formatIncline(inclinePercent: number | undefined): string {
   if (inclinePercent === undefined || !Number.isFinite(inclinePercent)) return "0.0";
   return inclinePercent.toFixed(1);

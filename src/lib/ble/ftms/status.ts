@@ -2,6 +2,7 @@ import { ByteCursor } from "../byte-cursor";
 import {
   DEFAULT_MACHINE_SPEED_UNIT,
   fromMachineSpeed,
+  toMachineSpeed,
   type MachineSpeedUnit,
 } from "./speed-units";
 
@@ -94,10 +95,12 @@ export function parseFitnessMachineStatus(
     case StatusOpCode.targetSpeedChanged: {
       if (!cursor.has(2)) return { opCode, message: "Target speed changed" };
       const targetSpeedKph = fromMachineSpeed(cursor.uint16() / 100, unit);
+      const shown = toMachineSpeed(targetSpeedKph, unit);
+      const unitLabel = unit === "mph" ? "mph" : "km/h";
       return {
         opCode,
         targetSpeedKph,
-        message: `Target speed changed to ${targetSpeedKph.toFixed(1)} km/h`,
+        message: `Target speed changed to ${shown.toFixed(1)} ${unitLabel}`,
       };
     }
 

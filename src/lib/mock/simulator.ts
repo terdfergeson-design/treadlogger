@@ -222,7 +222,11 @@ export class SimulatedTreadmill extends TreadmillSource {
     );
 
     this.belt.targetSpeedKph = accepted;
-    this.patch({ lastMessage: `Target speed set to ${accepted.toFixed(1)} km/h` });
+    this.patch({
+      lastMessage: `Target speed set to ${toMachineSpeed(accepted, this.speedUnit).toFixed(1)} ${
+        this.speedUnit === "mph" ? "mph" : "km/h"
+      }`,
+    });
   }
 
   async setTargetIncline(inclinePercent: number): Promise<void> {

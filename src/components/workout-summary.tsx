@@ -15,13 +15,14 @@ import {
   formatDistance,
   formatDuration,
   formatHeartRate,
-  formatPace,
-  formatSpeed,
+  formatPaceWithUnit,
+  formatSpeedWithUnit,
 } from "@/lib/format";
 
 /** Post-workout summary and the FIT download. */
 export function WorkoutSummary() {
-  const { workout, encodedActivity, downloadActivity, maxHeartRateBpm, mode } = useWorkout();
+  const { workout, encodedActivity, downloadActivity, maxHeartRateBpm, mode, machineSpeedUnit } =
+    useWorkout();
 
   if (workout.state !== "finished" || workout.startedAt === undefined) return null;
 
@@ -54,10 +55,19 @@ export function WorkoutSummary() {
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <SummaryStat label="Moving time" value={formatDuration(workout.elapsedS)} />
           <SummaryStat label="Distance" value={`${distance.value} ${distance.unit}`} />
-          <SummaryStat label="Avg pace" value={`${formatPace(workout.avgPaceMinPerKm)} /km`} />
+          <SummaryStat
+            label="Avg pace"
+            value={formatPaceWithUnit(workout.avgPaceMinPerKm, machineSpeedUnit)}
+          />
           <SummaryStat label="Calories" value={`${formatCalories(workout.energyKcal)} kcal`} />
-          <SummaryStat label="Avg speed" value={`${formatSpeed(workout.avgSpeedKph)} km/h`} />
-          <SummaryStat label="Max speed" value={`${formatSpeed(workout.maxSpeedKph)} km/h`} />
+          <SummaryStat
+            label="Avg speed"
+            value={formatSpeedWithUnit(workout.avgSpeedKph, machineSpeedUnit)}
+          />
+          <SummaryStat
+            label="Max speed"
+            value={formatSpeedWithUnit(workout.maxSpeedKph, machineSpeedUnit)}
+          />
           <SummaryStat label="Avg heart rate" value={`${formatHeartRate(workout.avgHeartRateBpm)} bpm`} />
           <SummaryStat label="Max heart rate" value={`${formatHeartRate(workout.maxHeartRateBpm)} bpm`} />
         </dl>

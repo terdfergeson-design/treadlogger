@@ -13,7 +13,11 @@ import {
   formatHeartRate,
   formatIncline,
   formatPace,
+  formatPaceWithUnit,
   formatSpeed,
+  formatSpeedWithUnit,
+  paceUnitLabel,
+  speedUnitLabel,
 } from "@/lib/format";
 
 const STATE_BADGE = {
@@ -24,7 +28,7 @@ const STATE_BADGE = {
 } as const;
 
 export function LiveDashboard() {
-  const { workout, heartRate, treadmill } = useWorkout();
+  const { workout, heartRate, treadmill, machineSpeedUnit } = useWorkout();
 
   const distance = formatDistance(workout.distanceM);
   const badge = STATE_BADGE[workout.state];
@@ -68,8 +72,8 @@ export function LiveDashboard() {
           />
           <MetricTile
             label="Speed"
-            value={formatSpeed(liveSpeed)}
-            unit="km/h"
+            value={formatSpeed(liveSpeed, machineSpeedUnit)}
+            unit={speedUnitLabel(machineSpeedUnit)}
             icon={Gauge}
             emphasis
           />
@@ -84,7 +88,12 @@ export function LiveDashboard() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <MetricTile label="Pace" value={formatPace(workout.paceMinPerKm)} unit="/km" icon={Zap} />
+          <MetricTile
+            label="Pace"
+            value={formatPace(workout.paceMinPerKm, machineSpeedUnit)}
+            unit={paceUnitLabel(machineSpeedUnit)}
+            icon={Zap}
+          />
           <MetricTile
             label="Incline"
             value={formatIncline(liveIncline)}
@@ -106,9 +115,18 @@ export function LiveDashboard() {
         </div>
 
         <dl className="text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-1 pt-1 text-xs sm:grid-cols-4">
-          <SecondaryStat label="Avg speed" value={`${formatSpeed(workout.avgSpeedKph)} km/h`} />
-          <SecondaryStat label="Max speed" value={`${formatSpeed(workout.maxSpeedKph)} km/h`} />
-          <SecondaryStat label="Avg pace" value={`${formatPace(workout.avgPaceMinPerKm)} /km`} />
+          <SecondaryStat
+            label="Avg speed"
+            value={formatSpeedWithUnit(workout.avgSpeedKph, machineSpeedUnit)}
+          />
+          <SecondaryStat
+            label="Max speed"
+            value={formatSpeedWithUnit(workout.maxSpeedKph, machineSpeedUnit)}
+          />
+          <SecondaryStat
+            label="Avg pace"
+            value={formatPaceWithUnit(workout.avgPaceMinPerKm, machineSpeedUnit)}
+          />
           <SecondaryStat
             label="Avg / max HR"
             value={`${formatHeartRate(workout.avgHeartRateBpm)} / ${formatHeartRate(workout.maxHeartRateBpm)} bpm`}
