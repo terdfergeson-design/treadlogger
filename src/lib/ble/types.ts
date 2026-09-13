@@ -1,7 +1,11 @@
 import type { FeatureReport } from "./ftms/features";
 import type { InclinationRange, SpeedRange } from "./ftms/ranges";
 import type { MachineState } from "./ftms/status";
-import { DEFAULT_MACHINE_SPEED_UNIT, type MachineSpeedUnit } from "./ftms/speed-units";
+import {
+  DEFAULT_MACHINE_SPEED_UNIT,
+  fromMachineSpeed,
+  type MachineSpeedUnit,
+} from "./ftms/speed-units";
 import type { TreadmillData } from "./ftms/treadmill-data";
 import type { HeartRateMeasurement } from "./hr/measurement";
 import { ObservableStore } from "./observable-store";
@@ -73,16 +77,68 @@ export const emptyHeartRateSnapshot = (kind: SourceKind): HeartRateSnapshot => (
  * simulator. Nothing above this interface knows which one it holds.
  */
 export abstract class TreadmillSource extends ObservableStore<TreadmillSnapshot> {
-  /** The unit this machine puts in the FTMS speed fields. */
+  /**
+   * The unit this machine puts in the Treadmill Data (0x2ACD) speed fields —
+   * what a runner reads off the belt.
+   *
+   * This is deliberately a separate setting from {@link commandSpeedUnit}
+   * below. The two look like they ought to be the same machine property, and
+   * on most treadmills they are, but real hardware has turned up with a
+   * spec-compliant km/h Treadmill Data characteristic and a Control Point
+   * (0x2AD9) that reads its Set Target Speed parameter as mph regardless —
+   * different firmware paths, presumably written by different code, each
+   * with their own unit assumption. Sharing one flag between them meant a
+   * runner could get the readout right and still have the belt run at 1.609×
+   * whatever they asked for, with no way to fix it from this app.
+   */
   protected speedUnit: MachineSpeedUnit = DEFAULT_MACHINE_SPEED_UNIT;
 
   /**
-   * Declares the machine's speed unit. Safe to call while connected: the
-   * bounds already read from the machine are re-derived, so the control does
-   * not have to wait for a reconnect to show the corrected range.
+   * The unit this machine's Control Point actually reads the Set Target
+   * Speed parameter (0x2AD9) as, and by extension what its Supported Speed
+   * Range (0x2AD4) and the Fitness Machine Status (0x2ADA) "target speed
+   * changed" field are encoded in too, since both describe that same
+   * control-point value. See {@link speedUnit} for why this is not folded
+   * into that one setting.
+   */
+  protected commandSpeedUnit: MachineSpeedUnit = DEFAULT_MACHINE_SPEED_UNIT;
+
+  /**
+   * Declares the unit the machine's Treadmill Data notifications use. Safe to
+   * call while connected: nothing derived from it needs a reconnect to
+   * refresh.
    */
   setSpeedUnit(unit: MachineSpeedUnit): void {
     this.speedUnit = unit;
+  }
+
+  /**
+   * Declares the unit the machine's Control Point actually reads target
+   * speed as. Safe to call while connected: the speed bounds already read
+   * from the machine are re-derived, so the control does not have to wait
+   * for a reconnect to show the corrected range.
+   */
+  setCommandSpeedUnit(unit: MachineSpeedUnit): void {
+    this.commandSpeedUnit = unit;
+  }
+
+  /**
+   * Folds a freshly parsed Treadmill Data notification into the snapshot.
+   *
+   * A notification only carries the fields its flags mark present — some
+   * machines vary that set from packet to packet, e.g. trimming a payload's
+   * secondary fields on one tick and speed itself on the next, to stay under
+   * the connection's MTU. `parseTreadmillData` already returns `undefined` for
+   * anything absent, so a plain overwrite of `data` would blank out a field
+   * that just did not happen to appear in this particular packet, and the
+   * value would flicker between real readings and 0 as different packets
+   * omit different fields. Merging instead keeps the last known value for
+   * whatever this notification did not include, and a field the machine
+   * genuinely reports as zero still overwrites normally, since it is present
+   * (just with value 0) rather than absent.
+   */
+  protected mergeTreadmillData(data: TreadmillData, timestamp: number): void {
+    this.patch({ data: { ...this.snapshot.data, ...data }, lastUpdateAt: timestamp });
   }
 
   abstract connect(): Promise<void>;
@@ -103,12 +159,19 @@ export abstract class HeartRateSource extends ObservableStore<HeartRateSnapshot>
 
 /**
  * Fallback bounds used until the machine reports its own, and by the simulator.
- * Chosen to match a typical folding home treadmill such as the THERUN T15.
+ * Chosen to match a typical folding home treadmill such as the THERUN T15:
+ * 0.5-12 mph. Defined from those mph figures rather than as round km/h
+ * numbers because the default command unit is mph (see
+ * `DEFAULT_COMMAND_SPEED_UNIT` in `use-machine-speed-unit.ts`): a bound that
+ * isn't a clean value in whatever unit it gets round-tripped through for the
+ * advertised Supported Speed Range picks up floating-point drift at that
+ * characteristic's 0.01 resolution, and a workout starting at exactly the
+ * minimum can then land a hair outside it and be rejected as out of range.
  */
 export const DEFAULT_SPEED_RANGE: SpeedRange = {
-  minKph: 1,
-  maxKph: 16,
-  incrementKph: 0.1,
+  minKph: fromMachineSpeed(0.5, "mph"),
+  maxKph: fromMachineSpeed(12, "mph"),
+  incrementKph: fromMachineSpeed(0.1, "mph"),
 };
 
 export const DEFAULT_INCLINE_RANGE: InclinationRange = {

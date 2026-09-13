@@ -16,6 +16,20 @@ import { emptyTimeInZones, zoneForHeartRate, type TimeInZones } from "./hr-zones
 
 export type WorkoutState = "idle" | "active" | "paused" | "finished";
 
+/**
+ * Rolling window used to smooth cadence. The vendor step counter only ever
+ * advances in whole steps, so a bare single-tick delta quantizes hard: one
+ * step in a ~1 s tick reads as exactly 60 spm, two steps as exactly 120 spm,
+ * with nothing in between — which is what made the live readout visibly
+ * snap between 60 and 120 instead of tracking a steady walking pace.
+ * Averaging steps over several seconds smooths that out.
+ */
+const CADENCE_WINDOW_MS = 6_000;
+/** Minimum span of step-count history required before reporting any cadence
+ *  at all — avoids a wild, single-sample number right after starting or
+ *  resuming. */
+const CADENCE_MIN_WINDOW_MS = 2_000;
+
 /** One second of the workout. The FIT `record` messages are built from these. */
 export interface WorkoutSample {
   /** Wall-clock time of the sample, epoch millis. */
@@ -30,6 +44,15 @@ export interface WorkoutSample {
   /** Cumulative energy for this workout, in kcal. */
   energyKcal?: number;
   cadenceSpm?: number;
+  /**
+   * Altitude relative to the start of the workout, in metres, derived from
+   * grade × distance covered. Unlike `elevationGainM` (which only ever
+   * climbs, tracking total ascent), this rises and falls with the belt's
+   * incline — a continuous profile for the FIT file's elevation trace.
+   * Treadmills have no real-world elevation, so it's relative to 0 at the
+   * start line, the same synthesis indoor cycling platforms use for rides.
+   */
+  elevationM?: number;
 }
 
 export interface WorkoutSnapshot {
@@ -60,6 +83,14 @@ export interface WorkoutSnapshot {
   /** Current pace in minutes per kilometre, derived from speed. */
   paceMinPerKm?: number;
   avgPaceMinPerKm?: number;
+
+  /**
+   * Steps per minute, derived from the treadmill's cumulative step count
+   * when it reports one — see `TreadmillDataFlag.stepCount`. Undefined for
+   * machines that never send a step count.
+   */
+  cadenceSpm?: number;
+  avgCadenceSpm?: number;
 
   timeInZones: TimeInZones;
   samples: WorkoutSample[];
@@ -102,10 +133,20 @@ export class WorkoutRecorder extends ObservableStore<WorkoutSnapshot> {
     distanceM?: number;
     energyKcal?: number;
     elevationGainM?: number;
+    stepCount?: number;
   } = {};
 
   private heartRateSum = 0;
   private heartRateCount = 0;
+  private totalSteps = 0;
+  /** Whether the treadmill has ever reported a step count this workout. */
+  private hasStepCountData = false;
+  /** Recent (timestamp, cumulative step count) samples, used to smooth the
+   *  live cadence readout over CADENCE_WINDOW_MS instead of one tick at a
+   *  time. Cleared on start/reset/pause so it never spans a gap. */
+  private stepHistory: { atMs: number; steps: number }[] = [];
+  /** Running altitude relative to the workout's start, for `WorkoutSample.elevationM`. */
+  private altitudeM = 0;
   private lastTickAt?: number;
   private pausedMs = 0;
   private pausedAt?: number;
@@ -128,6 +169,10 @@ export class WorkoutRecorder extends ObservableStore<WorkoutSnapshot> {
     this.previousTotals = {};
     this.heartRateSum = 0;
     this.heartRateCount = 0;
+    this.totalSteps = 0;
+    this.hasStepCountData = false;
+    this.stepHistory = [];
+    this.altitudeM = 0;
     this.pausedMs = 0;
     this.pausedAt = undefined;
     this.lastTickAt = now;
@@ -139,8 +184,11 @@ export class WorkoutRecorder extends ObservableStore<WorkoutSnapshot> {
     if (this.snapshot.state !== "active") return;
     this.pausedAt = now;
     // Counters are re-baselined on resume, so belt movement during the pause is
-    // not credited to the workout.
+    // not credited to the workout. The cadence window is cleared for the same
+    // reason — otherwise its next reading would average steps in with the
+    // wall-clock gap the pause left behind.
     this.previousTotals = {};
+    this.stepHistory = [];
     this.patch({ state: "paused", speedKph: 0 });
   }
 
@@ -165,6 +213,10 @@ export class WorkoutRecorder extends ObservableStore<WorkoutSnapshot> {
     this.previousTotals = {};
     this.heartRateSum = 0;
     this.heartRateCount = 0;
+    this.totalSteps = 0;
+    this.hasStepCountData = false;
+    this.stepHistory = [];
+    this.altitudeM = 0;
     this.pausedMs = 0;
     this.pausedAt = undefined;
     this.lastTickAt = undefined;
@@ -191,16 +243,55 @@ export class WorkoutRecorder extends ObservableStore<WorkoutSnapshot> {
     const inclinePercent = reading.treadmill.inclinationPercent;
     const heartRateBpm = reading.heartRate?.heartRateBpm ?? reading.treadmill.heartRateBpm;
 
-    const distanceM =
-      snapshot.distanceM +
+    const distanceDeltaM =
       this.accumulate("distanceM", reading.treadmill.totalDistanceM) +
       // Integrate speed when the treadmill does not report distance at all.
       (reading.treadmill.totalDistanceM === undefined ? (speedKph / 3.6) * dtSeconds : 0);
+    const distanceM = snapshot.distanceM + distanceDeltaM;
 
     const energyKcal = snapshot.energyKcal + this.accumulate("energyKcal", reading.treadmill.totalEnergyKcal);
     const elevationGainM =
       snapshot.elevationGainM +
-      this.accumulate("elevationGainM", reading.treadmill.positiveElevationGainM);
+      (reading.treadmill.positiveElevationGainM !== undefined
+        ? this.accumulate("elevationGainM", reading.treadmill.positiveElevationGainM)
+        : // FTMS's Elevation Gain field is a separate, rarely implemented
+          // characteristic — most treadmills (including grade-only machines)
+          // never send it, only the Inclination field. Without it, derive
+          // climbed elevation from grade x horizontal distance covered, the
+          // way most fitness apps do; declines (negative grade) don't
+          // subtract, matching what a dedicated "positive elevation gain"
+          // field would report.
+          (Math.max(0, inclinePercent ?? 0) / 100) * distanceDeltaM);
+
+    // A continuous altitude trace for the FIT file's elevation profile,
+    // distinct from elevationGainM above: that only ever climbs (it tracks
+    // total ascent), while this rises AND falls with the belt's incline, the
+    // way a real elevation profile would.
+    this.altitudeM += ((inclinePercent ?? 0) / 100) * distanceDeltaM;
+
+    // Cadence has no FTMS-defined source — it only exists on machines that
+    // report a step count on the vendor-specific bit (see
+    // TreadmillDataFlag.stepCount), so it stays undefined everywhere else.
+    const stepCountDeltaThisTick = this.accumulate("stepCount", reading.treadmill.stepCount);
+    if (reading.treadmill.stepCount !== undefined) this.hasStepCountData = true;
+    this.totalSteps += stepCountDeltaThisTick;
+
+    if (reading.treadmill.stepCount !== undefined) {
+      this.stepHistory.push({ atMs: now, steps: this.totalSteps });
+    }
+    const cadenceCutoffMs = now - CADENCE_WINDOW_MS;
+    while (this.stepHistory.length > 1 && this.stepHistory[0].atMs < cadenceCutoffMs) {
+      this.stepHistory.shift();
+    }
+    // A baselining tick (the first of the workout, or the first after a
+    // pause) leaves only one sample on record, so there's no span to average
+    // over yet — report no cadence rather than a misleading number.
+    const cadenceWindowStart = this.stepHistory[0];
+    const cadenceWindowMs = cadenceWindowStart ? now - cadenceWindowStart.atMs : 0;
+    const cadenceSpm =
+      cadenceWindowStart && cadenceWindowMs >= CADENCE_MIN_WINDOW_MS
+        ? ((this.totalSteps - cadenceWindowStart.steps) / (cadenceWindowMs / 1000)) * 60
+        : undefined;
 
     const elapsedS = Math.max(0, (now - snapshot.startedAt - this.pausedMs) / 1_000);
     const totalElapsedS = Math.max(0, (now - snapshot.startedAt) / 1_000);
@@ -225,6 +316,8 @@ export class WorkoutRecorder extends ObservableStore<WorkoutSnapshot> {
       inclinePercent,
       heartRateBpm,
       energyKcal: energyKcal > 0 ? energyKcal : undefined,
+      cadenceSpm,
+      elevationM: this.altitudeM,
     };
 
     this.patch({
@@ -251,6 +344,8 @@ export class WorkoutRecorder extends ObservableStore<WorkoutSnapshot> {
           : Math.min(snapshot.minHeartRateBpm ?? Number.POSITIVE_INFINITY, heartRateBpm),
       paceMinPerKm: paceFromSpeed(speedKph),
       avgPaceMinPerKm: paceFromSpeed(elapsedS > 0 ? (distanceM / elapsedS) * 3.6 : 0),
+      cadenceSpm,
+      avgCadenceSpm: this.hasStepCountData && elapsedS > 0 ? (this.totalSteps / elapsedS) * 60 : undefined,
       timeInZones,
       samples: [...snapshot.samples, sample],
     });
@@ -262,7 +357,7 @@ export class WorkoutRecorder extends ObservableStore<WorkoutSnapshot> {
    * step is skipped and the new value becomes the baseline.
    */
   private accumulate(
-    key: "distanceM" | "energyKcal" | "elevationGainM",
+    key: "distanceM" | "energyKcal" | "elevationGainM" | "stepCount",
     total: number | undefined,
   ): number {
     if (total === undefined) return 0;

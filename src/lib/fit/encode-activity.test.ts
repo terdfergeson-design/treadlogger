@@ -138,6 +138,37 @@ describe("encodeFitActivity", () => {
     });
   });
 
+  it("halves cadence into FIT's single-foot convention so readers don't double it into 2x the real pace", () => {
+    // Garmin Connect, Strava, etc. all double record.cadence back into a
+    // total steps/min figure when displaying it, so the value we write must
+    // already be halved — 168 total spm is a real, plausible running
+    // cadence, and should round-trip as 84 in the raw field.
+    const samples: WorkoutSample[] = [
+      { timestamp: START_MS + 1_000, elapsedS: 1, distanceM: 2, speedKph: 9, cadenceSpm: 168 },
+      { timestamp: START_MS + 2_000, elapsedS: 2, distanceM: 5, speedKph: 10, cadenceSpm: undefined },
+    ];
+
+    const messages = decode(encodeFitActivity(buildInput({ samples })));
+    const records = present(messages.recordMesgs, "record");
+
+    expect(records[0].cadence).toBe(84);
+    expect(records[1].cadence).toBeUndefined();
+  });
+
+  it("writes each record's altitude from the running elevation profile", () => {
+    const samples: WorkoutSample[] = [
+      { timestamp: START_MS + 1_000, elapsedS: 1, distanceM: 2, speedKph: 9, elevationM: 1.4 },
+      { timestamp: START_MS + 2_000, elapsedS: 2, distanceM: 5, speedKph: 10, elevationM: -0.6 },
+    ];
+
+    const messages = decode(encodeFitActivity(buildInput({ samples })));
+    const records = present(messages.recordMesgs, "record");
+
+    // altitude is stored at 1/5 m resolution.
+    expect(records[0].altitude!).toBeCloseTo(1.4, 1);
+    expect(records[1].altitude!).toBeCloseTo(-0.6, 1);
+  });
+
   it("writes the session totals a reader summarises the workout from", () => {
     const input = buildInput();
     const messages = decode(encodeFitActivity(input));

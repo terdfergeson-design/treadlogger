@@ -120,7 +120,10 @@ export function setTargetSpeed(
 ): Uint8Array {
   const raw = Math.round(toMachineSpeed(speedKph, unit) * 100);
   if (!Number.isFinite(raw) || raw < 0 || raw > 0xffff) {
-    throw new RangeError(`Target speed ${speedKph} km/h is outside the encodable range`);
+    // User-facing (surfaces in a toast), so reported in mph rather than the
+    // app's internal km/h currency.
+    const speedMph = toMachineSpeed(speedKph, "mph");
+    throw new RangeError(`Target speed ${speedMph.toFixed(1)} mph is outside the encodable range`);
   }
 
   const payload = new Uint8Array(3);

@@ -31,6 +31,14 @@ export const MACHINE_SPEED_UNIT_LABELS: Record<MachineSpeedUnit, string> = {
   mph: "mph",
 };
 
+/**
+ * The spec-compliant baseline: "no conversion applied". Every low-level parse
+ * and encode function below falls back to this when no unit is given, and it
+ * is what the control-point and treadmill-data tests exercise as the
+ * unconverted case. It is deliberately not the same thing as what the
+ * "Treadmill speed unit" toggle shows a first-time user — see
+ * {@link DEFAULT_UI_SPEED_UNIT} in `use-machine-speed-unit.ts` for that.
+ */
 export const DEFAULT_MACHINE_SPEED_UNIT: MachineSpeedUnit = "kph";
 
 /** Converts km/h into the value to write to the machine. */

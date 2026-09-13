@@ -69,6 +69,20 @@ const asInteger = (value: number | undefined): number | undefined =>
   value === undefined || !Number.isFinite(value) ? undefined : Math.round(value);
 
 /**
+ * FIT's `record.cadence` follows Garmin's running convention, inherited from
+ * the field's original cycling use: it's strides of a single foot per
+ * minute, i.e. half of total steps per minute, not the full cadence. Garmin
+ * Connect, Strava and other readers double this field back to a normal
+ * steps/min figure when they display "run cadence" — so writing our
+ * already-total `cadenceSpm` straight into it would make every reader show
+ * exactly double the runner's real cadence.
+ */
+const toFitCadence = (stepsPerMinute: number | undefined): number | undefined =>
+  stepsPerMinute === undefined || !Number.isFinite(stepsPerMinute)
+    ? undefined
+    : Math.round(stepsPerMinute / 2);
+
+/**
  * FIT timestamps have one-second resolution, so two samples inside the same
  * second would collide. Keeps the last sample for each second and orders them,
  * since records must be chronological.
@@ -185,7 +199,11 @@ export function encodeFitActivity(input: FitActivityInput): Uint8Array {
       heartRate: asInteger(sample.heartRateBpm),
       // FIT calls treadmill incline "grade", in percent.
       grade: sample.inclinePercent,
-      cadence: asInteger(sample.cadenceSpm),
+      cadence: toFitCadence(sample.cadenceSpm),
+      // A treadmill has no real-world elevation, so this is a relative
+      // profile starting at 0 that rises and falls with grade — see
+      // WorkoutSample.elevationM.
+      altitude: sample.elevationM,
     };
     encoder.writeMesg(record);
   }

@@ -7,7 +7,11 @@ import { useWorkout } from "@/components/workout-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatIncline, formatSpeed } from "@/lib/format";
+import { formatIncline, formatSpeed, speedUnitLabel } from "@/lib/format";
+import { toMachineSpeed } from "@/lib/ble/ftms/speed-units";
+
+/** This app always displays in US customary units — see live-dashboard.tsx. */
+const DISPLAY_UNIT = "mph";
 
 export function TreadmillCard() {
   const { treadmill, connectTreadmill, disconnectTreadmill, mode, bluetoothSupported, busy } =
@@ -43,7 +47,10 @@ export function TreadmillCard() {
           <>
             <p className="truncate text-sm font-medium">{treadmill.deviceName}</p>
             <div className="grid grid-cols-2 gap-2">
-              <MiniStat label="Belt speed" value={`${formatSpeed(treadmill.data.speedKph)} km/h`} />
+              <MiniStat
+                label="Belt speed"
+                value={`${formatSpeed(treadmill.data.speedKph, DISPLAY_UNIT)} ${speedUnitLabel(DISPLAY_UNIT)}`}
+              />
               <MiniStat
                 label="Incline"
                 value={`${formatIncline(treadmill.data.inclinationPercent)} %`}
@@ -51,8 +58,9 @@ export function TreadmillCard() {
             </div>
             {treadmill.speedRange ? (
               <p className="text-muted-foreground text-xs">
-                Supports {treadmill.speedRange.minKph.toFixed(1)}–
-                {treadmill.speedRange.maxKph.toFixed(1)} km/h
+                Supports {toMachineSpeed(treadmill.speedRange.minKph, DISPLAY_UNIT).toFixed(1)}–
+                {toMachineSpeed(treadmill.speedRange.maxKph, DISPLAY_UNIT).toFixed(1)}{" "}
+                {speedUnitLabel(DISPLAY_UNIT)}
                 {treadmill.inclineRange
                   ? ` and ${treadmill.inclineRange.minPercent.toFixed(0)}–${treadmill.inclineRange.maxPercent.toFixed(0)} % incline`
                   : ""}

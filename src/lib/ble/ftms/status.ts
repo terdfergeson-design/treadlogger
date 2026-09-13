@@ -2,6 +2,7 @@ import { ByteCursor } from "../byte-cursor";
 import {
   DEFAULT_MACHINE_SPEED_UNIT,
   fromMachineSpeed,
+  toMachineSpeed,
   type MachineSpeedUnit,
 } from "./speed-units";
 
@@ -94,10 +95,12 @@ export function parseFitnessMachineStatus(
     case StatusOpCode.targetSpeedChanged: {
       if (!cursor.has(2)) return { opCode, message: "Target speed changed" };
       const targetSpeedKph = fromMachineSpeed(cursor.uint16() / 100, unit);
+      // The message is user-facing, so it is reported in mph regardless of the
+      // machine's own unit, which only matters for the GATT conversion above.
       return {
         opCode,
         targetSpeedKph,
-        message: `Target speed changed to ${targetSpeedKph.toFixed(1)} km/h`,
+        message: `Target speed changed to ${toMachineSpeed(targetSpeedKph, "mph").toFixed(1)} mph`,
       };
     }
 

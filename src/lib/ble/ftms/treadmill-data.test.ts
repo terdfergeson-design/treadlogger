@@ -124,6 +124,15 @@ describe("parseTreadmillData", () => {
     expect(data.totalDistanceM).toBeUndefined();
   });
 
+  it("reads the vendor step count bit a THERUN T15 sends on its own extra packet", () => {
+    // flags 0x2001: More Data set (no speed) plus the non-spec bit 13, as
+    // captured from a real THERUN T15 mid-run: 0x00bd = 189 steps.
+    const data = parseTreadmillData(bytesToDataView([0x01, 0x20, 0xbd, 0x00, 0x00]));
+
+    expect(data.speedKph).toBeUndefined();
+    expect(data.stepCount).toBe(189);
+  });
+
   it("rejects a payload too short to hold the flags field", () => {
     expect(() => parseTreadmillData(bytesToDataView([0x00]))).toThrow(/too short/i);
   });

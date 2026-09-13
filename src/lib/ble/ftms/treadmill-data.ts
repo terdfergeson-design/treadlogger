@@ -33,6 +33,15 @@ export const TreadmillDataFlag = {
   elapsedTime: 1 << 10,
   remainingTime: 1 << 11,
   forceOnBeltAndPowerOutput: 1 << 12,
+  /**
+   * Not part of the FTMS spec — bits 13-15 of this field are reserved there.
+   * A THERUN T15 was observed setting this bit on an extra, otherwise-empty
+   * Treadmill Data notification it sends right after every standard one,
+   * with a two-byte cumulative step count following the flags. Treat it as
+   * a vendor extension rather than a documented field: other machines are
+   * very unlikely to use bit 13 the same way, if they set it at all.
+   */
+  stepCount: 1 << 13,
 } as const;
 
 /** FTMS signals "this reading is unavailable" with an all-ones field. */
@@ -72,6 +81,12 @@ export interface TreadmillData {
   remainingTimeS?: number;
   forceOnBeltNewtons?: number;
   powerOutputWatts?: number;
+  /**
+   * Cumulative step count. Vendor-specific, not an FTMS field — see
+   * {@link TreadmillDataFlag.stepCount}. Only present on machines that set
+   * that bit; most treadmills never will.
+   */
+  stepCount?: number;
 }
 
 /**
@@ -166,6 +181,10 @@ export function parseTreadmillData(
   if (present(TreadmillDataFlag.forceOnBeltAndPowerOutput) && cursor.has(4)) {
     data.forceOnBeltNewtons = cursor.int16();
     data.powerOutputWatts = cursor.int16();
+  }
+
+  if (present(TreadmillDataFlag.stepCount) && cursor.has(2)) {
+    data.stepCount = cursor.uint16();
   }
 
   return data;

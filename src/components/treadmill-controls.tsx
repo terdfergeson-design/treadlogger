@@ -1,11 +1,26 @@
 "use client";
 
-import { Gauge, Minus, Plus, TrendingUp } from "lucide-react";
+import { Gauge, Minus, Plus, Settings, TrendingUp } from "lucide-react";
 
 import { useWorkout } from "@/components/workout-provider";
 import { useDraftValue } from "@/hooks/use-draft-value";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -18,6 +33,15 @@ import {
 import { speedUnitLabel } from "@/lib/format";
 
 /**
+ * This app always displays and accepts input in US customary units, regardless
+ * of the "Treadmill speed unit" setting below — that setting is a separate,
+ * hardware-level correction for machines whose FTMS fields lie about their
+ * unit, applied once the number crosses the GATT boundary. Conflating the two
+ * would mean a runner's display preference could silently mis-drive the belt.
+ */
+const DISPLAY_UNIT = "mph";
+
+/**
  * Speed and incline control.
  *
  * Every change is a write to the FTMS control point, so the slider commits on
@@ -27,6 +51,7 @@ import { speedUnitLabel } from "@/lib/format";
 export function TreadmillControls() {
   const {
     treadmill,
+    workout,
     targetSpeedKph,
     targetInclinePercent,
     setTargetSpeed,
@@ -34,16 +59,25 @@ export function TreadmillControls() {
     speedRange,
     inclineRange,
     machineSpeedUnit,
+    setMachineSpeedUnit,
+    commandSpeedUnit,
+    setCommandSpeedUnit,
   } = useWorkout();
 
   const connected = treadmill.connection === "connected";
   const inclineSupported = treadmill.features?.targets.inclination ?? true;
   const speedSupported = treadmill.features?.targets.speed ?? true;
 
-  // The control speaks the machine's unit, so the number the runner dials in is
-  // the number the treadmill acts on. km/h stays the app's internal currency.
-  const shown = (speedKph: number) => Number(toMachineSpeed(speedKph, machineSpeedUnit).toFixed(2));
-  const commanded = (shownSpeed: number) => fromMachineSpeed(shownSpeed, machineSpeedUnit);
+  // This treadmill always begins a workout at 0.5 mph no matter what target
+  // was requested beforehand, so a pre-start speed choice would be a lie —
+  // the control stays locked until the workout is actually running (or
+  // paused mid-run, where picking a resume speed is meaningful again).
+  const workoutRunning = workout.state === "active" || workout.state === "paused";
+
+  // The runner always dials in and reads mph; km/h stays the app's internal
+  // currency (and separately, whatever the machine's own GATT fields need).
+  const shown = (speedKph: number) => Number(toMachineSpeed(speedKph, DISPLAY_UNIT).toFixed(2));
+  const commanded = (shownSpeed: number) => fromMachineSpeed(shownSpeed, DISPLAY_UNIT);
 
   return (
     <Card>
@@ -56,6 +90,39 @@ export function TreadmillControls() {
               : "The treadmill has not granted control, so these will be rejected."
             : "Connect a treadmill to drive speed and incline from here."}
         </CardDescription>
+        <CardAction>
+          <Popover>
+            <PopoverTrigger
+              aria-label="Treadmill unit quirks"
+              className={buttonVariants({ variant: "ghost", size: "icon" })}
+            >
+              <Settings className="size-4" />
+            </PopoverTrigger>
+            <PopoverContent align="end">
+              <PopoverHeader>
+                <PopoverTitle>Treadmill unit quirks</PopoverTitle>
+                <PopoverDescription>
+                  Only change these if the numbers on this card disagree with the treadmill
+                  itself — most machines never need this.
+                </PopoverDescription>
+              </PopoverHeader>
+              <div className="space-y-3 pt-1">
+                <MachineSpeedUnitSetting
+                  label="Treadmill readout unit"
+                  help="Leave this on km/h unless the belt speed shown here disagrees with the treadmill's own console."
+                  unit={machineSpeedUnit}
+                  setUnit={setMachineSpeedUnit}
+                />
+                <MachineSpeedUnitSetting
+                  label="Target speed command unit"
+                  help="Leave this on mph unless the belt runs faster or slower than the speed you set, even though the readout above is correct."
+                  unit={commandSpeedUnit}
+                  setUnit={setCommandSpeedUnit}
+                />
+              </div>
+            </PopoverContent>
+          </Popover>
+        </CardAction>
       </CardHeader>
 
       <CardContent className="space-y-6">
@@ -63,15 +130,27 @@ export function TreadmillControls() {
           icon={Gauge}
           label="Target speed"
           value={shown(targetSpeedKph)}
-          unit={speedUnitLabel(machineSpeedUnit)}
+          unit={speedUnitLabel(DISPLAY_UNIT)}
           decimals={1}
           min={shown(speedRange.minKph)}
           max={shown(speedRange.maxKph)}
-          step={Math.max(0.1, shown(speedRange.incrementKph))}
+          // The machine's real grid lives in its own native unit (often km/h
+          // even on an mph-console machine). Flooring this to a round 0.1 in
+          // the *display* unit would let the slider land on mph values that
+          // don't sit on that grid, so the belt would silently round the
+          // command to its nearest supported speed — a gap between what the
+          // slider shows and what the belt actually settles at. The floor
+          // here only guards against a machine reporting a zero increment.
+          step={Math.max(0.01, shown(speedRange.incrementKph))}
           actual={
             treadmill.data.speedKph === undefined ? undefined : shown(treadmill.data.speedKph)
           }
-          disabled={!connected || !speedSupported}
+          disabled={!connected || !speedSupported || !workoutRunning}
+          disabledNote={
+            connected && speedSupported && !workoutRunning
+              ? "Locked until the workout starts — this treadmill always begins at 0.5 mph."
+              : undefined
+          }
           onCommit={(value) => setTargetSpeed(commanded(value))}
         />
 
@@ -91,44 +170,55 @@ export function TreadmillControls() {
           }
           onCommit={setTargetIncline}
         />
-
-        <MachineSpeedUnitSetting />
       </CardContent>
     </Card>
   );
 }
 
 /**
- * Declares what the treadmill really means by its FTMS speed fields.
+ * Declares what the treadmill really means by one group of its FTMS speed
+ * fields — either the Treadmill Data readout, or the Control Point's target
+ * speed (which also governs Supported Speed Range and the status
+ * characteristic's target-speed-changed field, since all three describe that
+ * same control-point value).
  *
- * The spec says kilometres per hour, but a machine built around a mph console
- * can put miles per hour in the same fields, in which case the belt runs a
- * factor of 1.609 fast and its reported speed reads a factor of 1.609 slow.
- * Only the owner of the machine can tell, so it is a setting rather than a
- * guess, and it lives next to the control where the discrepancy shows up.
+ * The spec says kilometres per hour throughout, but a machine built around a
+ * mph console can put miles per hour in some or all of these fields instead,
+ * in which case whichever direction is affected runs or reads a factor of
+ * 1.609 off. These two groups are deliberately separate settings rather than
+ * one: real hardware has turned up whose readout is spec-compliant km/h
+ * while its Control Point reads mph regardless, so a single toggle cannot
+ * describe both. Only the owner of the machine can tell which is which, so
+ * each is a setting rather than a guess, and both live next to the controls
+ * where the discrepancy shows up — now tucked behind the gear icon on this
+ * card, since it's a one-time-per-machine setting rather than something a
+ * runner touches every workout.
  */
-function MachineSpeedUnitSetting() {
-  const { machineSpeedUnit, setMachineSpeedUnit } = useWorkout();
-
+function MachineSpeedUnitSetting({
+  label,
+  help,
+  unit,
+  setUnit,
+}: {
+  label: string;
+  help: string;
+  unit: MachineSpeedUnit;
+  setUnit: (unit: MachineSpeedUnit) => void;
+}) {
   return (
-    <div className="flex items-end justify-between gap-3 border-t pt-4">
+    <div className="space-y-1.5">
       <div>
         <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
-          Treadmill speed unit
+          {label}
         </p>
-        <p className="text-muted-foreground mt-1 text-[11px]">
-          Leave this on km/h unless the belt runs faster than the speed you set.
-        </p>
+        <p className="text-muted-foreground mt-1 text-[11px]">{help}</p>
       </div>
 
-      <Tabs
-        value={machineSpeedUnit}
-        onValueChange={(value) => setMachineSpeedUnit(value as MachineSpeedUnit)}
-      >
+      <Tabs value={unit} onValueChange={(value) => setUnit(value as MachineSpeedUnit)}>
         <TabsList>
-          {MACHINE_SPEED_UNITS.map((unit) => (
-            <TabsTrigger key={unit} value={unit}>
-              {MACHINE_SPEED_UNIT_LABELS[unit]}
+          {MACHINE_SPEED_UNITS.map((option) => (
+            <TabsTrigger key={option} value={option}>
+              {MACHINE_SPEED_UNIT_LABELS[option]}
             </TabsTrigger>
           ))}
         </TabsList>

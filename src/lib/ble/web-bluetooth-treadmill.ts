@@ -65,7 +65,10 @@ export class WebBluetoothTreadmill extends TreadmillSource {
     timer: ReturnType<typeof setTimeout>;
   };
 
-  constructor(speedUnit: MachineSpeedUnit = DEFAULT_MACHINE_SPEED_UNIT) {
+  constructor(
+    speedUnit: MachineSpeedUnit = DEFAULT_MACHINE_SPEED_UNIT,
+    commandSpeedUnit: MachineSpeedUnit = DEFAULT_MACHINE_SPEED_UNIT,
+  ) {
     // Deliberately does not probe for Web Bluetooth here. The store is created
     // during server rendering too, and branching on `navigator` would give the
     // server and the client different first snapshots. Support is reported by the
@@ -73,10 +76,13 @@ export class WebBluetoothTreadmill extends TreadmillSource {
     // again.
     super(emptyTreadmillSnapshot("bluetooth"));
     this.speedUnit = speedUnit;
+    this.commandSpeedUnit = commandSpeedUnit;
   }
 
-  override setSpeedUnit(unit: MachineSpeedUnit): void {
-    super.setSpeedUnit(unit);
+  override setCommandSpeedUnit(unit: MachineSpeedUnit): void {
+    super.setCommandSpeedUnit(unit);
+    // Supported Speed Range bounds the Control Point, not Treadmill Data, so
+    // it is re-derived here rather than from `setSpeedUnit`.
     if (this.rawSpeedRange) {
       this.patch({ speedRange: parseSupportedSpeedRange(this.rawSpeedRange, unit) });
     }
@@ -171,7 +177,7 @@ export class WebBluetoothTreadmill extends TreadmillSource {
   async setTargetSpeed(speedKph: number): Promise<void> {
     await this.command(
       ControlOpCode.setTargetSpeed,
-      setTargetSpeed(speedKph, this.speedUnit),
+      setTargetSpeed(speedKph, this.commandSpeedUnit),
     );
   }
 
@@ -186,10 +192,7 @@ export class WebBluetoothTreadmill extends TreadmillSource {
       if (!value) return;
 
       try {
-        this.patch({
-          data: parseTreadmillData(value, this.speedUnit),
-          lastUpdateAt: Date.now(),
-        });
+        this.mergeTreadmillData(parseTreadmillData(value, this.speedUnit), Date.now());
       } catch (error) {
         console.warn("Ignoring malformed Treadmill Data notification", error);
       }
@@ -207,7 +210,9 @@ export class WebBluetoothTreadmill extends TreadmillSource {
         if (!value) return;
 
         try {
-          const status = parseFitnessMachineStatus(value, this.speedUnit);
+          // "Target speed changed" describes the same Control Point value as
+          // Set Target Speed, so it uses the command unit, not the readout one.
+          const status = parseFitnessMachineStatus(value, this.commandSpeedUnit);
           this.patch({
             lastMessage: status.message,
             ...(status.state ? { machineState: status.state } : {}),
@@ -244,7 +249,9 @@ export class WebBluetoothTreadmill extends TreadmillSource {
       this.rawSpeedRange = new Uint8Array(
         value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength),
       );
-      this.patch({ speedRange: parseSupportedSpeedRange(value, this.speedUnit) });
+      // Bounds the Control Point's Set Target Speed parameter, so it is read
+      // in the command unit, not the Treadmill Data readout unit.
+      this.patch({ speedRange: parseSupportedSpeedRange(value, this.commandSpeedUnit) });
     });
     await this.tryRead(service, FTMS.supportedInclinationRange, (value) => {
       this.patch({ inclineRange: parseSupportedInclinationRange(value) });

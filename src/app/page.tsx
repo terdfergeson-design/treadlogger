@@ -7,6 +7,7 @@ import { LiveDashboard } from "@/components/live-dashboard";
 import { ModeSwitcher } from "@/components/mode-switcher";
 import { RunnerSettings } from "@/components/runner-settings";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { TrackProgress } from "@/components/track-progress";
 import { TreadmillCard } from "@/components/treadmill-card";
 import { TreadmillControls } from "@/components/treadmill-controls";
 import { WorkoutControls } from "@/components/workout-controls";
@@ -41,6 +42,8 @@ export default function Home() {
           <TreadmillCard />
           <HeartRateCard />
         </div>
+
+        <TrackProgress />
 
         <LiveDashboard />
         <WorkoutControls />

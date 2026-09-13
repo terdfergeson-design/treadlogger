@@ -15,6 +15,7 @@ import { parseFitnessMachineStatus, StatusOpCode } from "../ble/ftms/status";
 import { parseFitnessMachineFeature } from "../ble/ftms/features";
 import { parseHeartRateMeasurement } from "../ble/hr/measurement";
 import {
+  DEFAULT_SPEED_RANGE,
   emptyHeartRateSnapshot,
   emptyTreadmillSnapshot,
   HeartRateSource,
@@ -57,8 +58,22 @@ const CONNECT_LATENCY_MS = 650;
 const SPEED_RAMP_KPH_PER_S = 0.9;
 const INCLINE_RAMP_PERCENT_PER_S = 1.2;
 
-const SIMULATED_SPEED_RANGE = { minKph: 1, maxKph: 16, incrementKph: 0.1 };
+// Same bounds the rest of the app falls back to (see the doc comment on
+// DEFAULT_SPEED_RANGE) — kept as one shared constant rather than a second
+// copy of the same numbers, so the two can never quietly drift apart.
+const SIMULATED_SPEED_RANGE = DEFAULT_SPEED_RANGE;
 const SIMULATED_INCLINE_RANGE = { minPercent: 0, maxPercent: 15, incrementPercent: 1 };
+
+/**
+ * Tolerance for the target-speed range check below, in km/h. The UI clamps a
+ * requested speed to the machine's *advertised* Supported Speed Range, which
+ * has been round-tripped through the command unit's 0.01 resolution (see
+ * `advertisedSpeedRange`) and can therefore land a hair inside or outside
+ * `SIMULATED_SPEED_RANGE` from float rounding alone, not because the speed is
+ * actually out of range. This comfortably covers a 0.01-unit quantization
+ * step converted through either supported command unit.
+ */
+const SPEED_RANGE_EPSILON_KPH = 0.02;
 
 /** Feature bits a treadmill of this class advertises. */
 const SIMULATED_MACHINE_FLAGS =
@@ -158,24 +173,31 @@ export class SimulatedTreadmill extends TreadmillSource {
   override setSpeedUnit(unit: MachineSpeedUnit): void {
     super.setSpeedUnit(unit);
     if (this.snapshot.connection !== "connected") return;
-
-    this.patch({ speedRange: this.advertisedSpeedRange() });
     this.emitTreadmillData();
+  }
+
+  override setCommandSpeedUnit(unit: MachineSpeedUnit): void {
+    super.setCommandSpeedUnit(unit);
+    if (this.snapshot.connection !== "connected") return;
+    this.patch({ speedRange: this.advertisedSpeedRange() });
   }
 
   /**
    * The machine's own bounds, advertised in its own unit. Read back through the
    * parser so the simulated capability read exercises the same conversion a
-   * real machine's would.
+   * real machine's would. Supported Speed Range bounds the Control Point, so
+   * this uses the command unit — separate from the Treadmill Data readout
+   * unit, so the simulator can reproduce a machine whose console-facing
+   * readout and control point disagree, the same as real hardware has.
    */
   private advertisedSpeedRange(): SpeedRange {
     return parseSupportedSpeedRange(
       buildSpeedRangePayload(
-        toMachineSpeed(SIMULATED_SPEED_RANGE.minKph, this.speedUnit),
-        toMachineSpeed(SIMULATED_SPEED_RANGE.maxKph, this.speedUnit),
-        toMachineSpeed(SIMULATED_SPEED_RANGE.incrementKph, this.speedUnit),
+        toMachineSpeed(SIMULATED_SPEED_RANGE.minKph, this.commandSpeedUnit),
+        toMachineSpeed(SIMULATED_SPEED_RANGE.maxKph, this.commandSpeedUnit),
+        toMachineSpeed(SIMULATED_SPEED_RANGE.incrementKph, this.commandSpeedUnit),
       ),
-      this.speedUnit,
+      this.commandSpeedUnit,
     );
   }
 
@@ -204,7 +226,7 @@ export class SimulatedTreadmill extends TreadmillSource {
 
   async setTargetSpeed(speedKph: number): Promise<void> {
     const { minKph, maxKph } = SIMULATED_SPEED_RANGE;
-    if (speedKph < minKph || speedKph > maxKph) {
+    if (speedKph < minKph - SPEED_RANGE_EPSILON_KPH || speedKph > maxKph + SPEED_RANGE_EPSILON_KPH) {
       // Mirrors the machine rejecting an out-of-range target rather than
       // silently clamping, which is what the control point actually does.
       throw new Error(
@@ -215,14 +237,20 @@ export class SimulatedTreadmill extends TreadmillSource {
     // Take the target off the wire rather than from the argument, so mock mode
     // exercises the real encoder and the simulated belt honours exactly the
     // value a machine of this unit would have received, quantisation included.
-    const command = setTargetSpeedCommand(speedKph, this.speedUnit);
+    // This is the command unit: Set Target Speed is a Control Point field,
+    // independent of whatever unit Treadmill Data reports the readout in.
+    const command = setTargetSpeedCommand(speedKph, this.commandSpeedUnit);
     const accepted = fromMachineSpeed(
       new ByteCursor(command.subarray(1)).uint16() / 100,
-      this.speedUnit,
+      this.commandSpeedUnit,
     );
 
     this.belt.targetSpeedKph = accepted;
-    this.patch({ lastMessage: `Target speed set to ${accepted.toFixed(1)} km/h` });
+    // The message is user-facing, so it is reported in mph regardless of the
+    // simulated machine's own unit.
+    this.patch({
+      lastMessage: `Target speed set to ${toMachineSpeed(accepted, "mph").toFixed(1)} mph`,
+    });
   }
 
   async setTargetIncline(inclinePercent: number): Promise<void> {
@@ -302,16 +330,16 @@ export class SimulatedTreadmill extends TreadmillSource {
       elapsedTimeS: belt.elapsedS,
     });
 
-    this.patch({
-      data: parseTreadmillData(payload, this.speedUnit),
-      lastUpdateAt: Date.now(),
-    });
+    this.mergeTreadmillData(parseTreadmillData(payload, this.speedUnit), Date.now());
   }
 
   private applyStatus(opCode: number, parameter: number[] = []): void {
+    // Only start/stop/pause go through here today, none of which carry a
+    // speed value, but a target-speed-changed status would describe the same
+    // Control Point value as Set Target Speed, hence the command unit.
     const status = parseFitnessMachineStatus(
       buildStatusPayload(opCode, parameter),
-      this.speedUnit,
+      this.commandSpeedUnit,
     );
     this.patch({ lastMessage: status.message });
   }

@@ -18,11 +18,20 @@ export function formatDuration(totalSeconds: number): string {
   return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
 }
 
-/** Metres below a kilometre, kilometres above it. */
+/** Metres per international foot, so the conversion below is exact. */
+const METRES_PER_FOOT = 0.3048;
+export const METRES_PER_MILE = METRES_PER_FOOT * 5280;
+
+/** Total elapsed distance, always in miles to the nearest hundredth. */
 export function formatDistance(metres: number): { value: string; unit: string } {
-  if (!Number.isFinite(metres) || metres < 0) return { value: "0", unit: "m" };
-  if (metres < 1000) return { value: Math.round(metres).toString(), unit: "m" };
-  return { value: (metres / 1000).toFixed(2), unit: "km" };
+  if (!Number.isFinite(metres) || metres < 0) return { value: "0.00", unit: "mi" };
+  return { value: (metres / METRES_PER_MILE).toFixed(2), unit: "mi" };
+}
+
+/** Elevation gain, always in feet — a workout rarely climbs a whole mile. */
+export function formatElevation(metres: number): string {
+  if (!Number.isFinite(metres) || metres < 0) return "0";
+  return Math.round(metres / METRES_PER_FOOT).toString();
 }
 
 /**
@@ -82,6 +91,14 @@ export function formatIncline(inclinePercent: number | undefined): string {
 export function formatHeartRate(bpm: number | undefined): string {
   if (bpm === undefined || !Number.isFinite(bpm) || bpm <= 0) return "—";
   return Math.round(bpm).toString();
+}
+
+/** Cadence in steps per minute. An em dash means the treadmill reports none. */
+export function formatCadence(stepsPerMinute: number | undefined): string {
+  if (stepsPerMinute === undefined || !Number.isFinite(stepsPerMinute) || stepsPerMinute < 0) {
+    return "—";
+  }
+  return Math.round(stepsPerMinute).toString();
 }
 
 export function formatCalories(kcal: number): string {

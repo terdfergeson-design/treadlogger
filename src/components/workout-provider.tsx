@@ -19,11 +19,11 @@ import {
   type TreadmillSnapshot,
   type TreadmillSource,
 } from "@/lib/ble/types";
-import { type MachineSpeedUnit } from "@/lib/ble/ftms/speed-units";
+import { fromMachineSpeed, type MachineSpeedUnit } from "@/lib/ble/ftms/speed-units";
 import { WebBluetoothTreadmill } from "@/lib/ble/web-bluetooth-treadmill";
 import { WebBluetoothHeartRate } from "@/lib/ble/web-bluetooth-heart-rate";
 import { useBluetoothSupport } from "@/hooks/use-bluetooth-support";
-import { useMachineSpeedUnit } from "@/hooks/use-machine-speed-unit";
+import { useCommandSpeedUnit, useMachineSpeedUnit } from "@/hooks/use-machine-speed-unit";
 import { createSimulator } from "@/lib/mock/simulator";
 import { DEFAULT_RUNNER_PROFILE } from "@/lib/mock/physiology";
 import {
@@ -45,6 +45,16 @@ export type DeviceMode = "bluetooth" | "simulator";
 
 /** How often the recorder folds a device reading into the session. */
 const SAMPLE_INTERVAL_MS = 1_000;
+
+/**
+ * This treadmill always begins a workout at 0.5 mph, no matter what target
+ * speed was requested beforehand — ramping up is left entirely to the runner
+ * once the belt is already moving. So the pre-start target is not really a
+ * choice the runner makes; it is fixed at what the machine actually does, and
+ * the control that lets you change it stays locked until the workout is
+ * underway (see the speed `ControlRow` in `treadmill-controls.tsx`).
+ */
+const STARTING_SPEED_KPH = fromMachineSpeed(0.5, "mph");
 
 export interface EncodedActivity {
   bytes: Uint8Array;
@@ -76,9 +86,18 @@ interface WorkoutContextValue {
   speedRange: typeof DEFAULT_SPEED_RANGE;
   inclineRange: typeof DEFAULT_INCLINE_RANGE;
 
-  /** The unit the connected treadmill uses in its FTMS speed fields. */
+  /** The unit the connected treadmill's Treadmill Data readout uses. */
   machineSpeedUnit: MachineSpeedUnit;
   setMachineSpeedUnit: (unit: MachineSpeedUnit) => void;
+
+  /**
+   * The unit the connected treadmill's Control Point actually reads target
+   * speed as. Independent of `machineSpeedUnit` — some real machines report a
+   * spec-compliant km/h readout while their Control Point reads mph
+   * regardless, so one toggle cannot describe both.
+   */
+  commandSpeedUnit: MachineSpeedUnit;
+  setCommandSpeedUnit: (unit: MachineSpeedUnit) => void;
 
   maxHeartRateBpm: number;
   setMaxHeartRateBpm: (bpm: number) => void;
@@ -115,7 +134,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [sources, setSources] = useState<Sources>(() => createSources("bluetooth"));
   const [maxHeartRateBpm, setMaxHeartRateBpm] = useState(DEFAULT_RUNNER_PROFILE.maxHeartRateBpm);
   const [machineSpeedUnit, setMachineSpeedUnit] = useMachineSpeedUnit();
-  const [requestedSpeedKph, setRequestedSpeedKph] = useState(8);
+  const [commandSpeedUnit, setCommandSpeedUnit] = useCommandSpeedUnit();
+  const [requestedSpeedKph, setRequestedSpeedKph] = useState(STARTING_SPEED_KPH);
   const [requestedInclinePercent, setRequestedInclinePercent] = useState(0);
   const [encodedActivity, setEncodedActivity] = useState<EncodedActivity | null>(null);
   const [busy, setBusy] = useState(false);
@@ -146,11 +166,15 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     recorder.setMaxHeartRate(maxHeartRateBpm);
   }, [recorder, maxHeartRateBpm]);
 
-  // The unit belongs to the machine, so it is pushed to whichever source is
-  // live, including one a mode switch has just created.
+  // Both units belong to the machine, so each is pushed to whichever source
+  // is live, including one a mode switch has just created.
   useEffect(() => {
     sources.treadmill.setSpeedUnit(machineSpeedUnit);
   }, [sources.treadmill, machineSpeedUnit]);
+
+  useEffect(() => {
+    sources.treadmill.setCommandSpeedUnit(commandSpeedUnit);
+  }, [sources.treadmill, commandSpeedUnit]);
 
   // Sampling reads each source's live snapshot rather than the values captured by
   // this render, so a tick can never fold a stale reading into the session. The
@@ -329,6 +353,9 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     }
 
     recorder.finish();
+    // The next workout begins at 0.5 mph regardless, so the pre-start slider
+    // should already show that rather than wherever this one ended.
+    setRequestedSpeedKph(STARTING_SPEED_KPH);
 
     const snapshot = recorder.snapshot;
     if (snapshot.startedAt === undefined) return;
@@ -360,6 +387,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const discardWorkout = useCallback(() => {
     recorder.reset();
     setEncodedActivity(null);
+    setRequestedSpeedKph(STARTING_SPEED_KPH);
   }, [recorder]);
 
   const downloadActivity = useCallback(() => {
@@ -389,6 +417,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       inclineRange,
       machineSpeedUnit,
       setMachineSpeedUnit,
+      commandSpeedUnit,
+      setCommandSpeedUnit,
       maxHeartRateBpm,
       setMaxHeartRateBpm,
       startWorkout,
@@ -420,6 +450,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       inclineRange,
       machineSpeedUnit,
       setMachineSpeedUnit,
+      commandSpeedUnit,
+      setCommandSpeedUnit,
       maxHeartRateBpm,
       startWorkout,
       pauseWorkout,
