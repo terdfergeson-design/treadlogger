@@ -1,6 +1,7 @@
 /**
- * Captures the pace track and the workout summary as one PNG, so a runner
- * can save a picture of the run alongside the FIT file.
+ * Captures the pace track, the pace/elevation/heart-rate chart, and the
+ * workout summary as one PNG, so a runner can save a picture of the run
+ * alongside the FIT file.
  *
  * Renders with html2canvas-pro rather than plain html2canvas: this app's
  * Tailwind v4 theme is defined in OKLCH (see globals.css), and the original,
@@ -22,9 +23,11 @@
  */
 import html2canvas from "html2canvas-pro";
 
-/** DOM ids the two capture targets are given — see track-progress.tsx and
- *  workout-summary.tsx. Exported so those files and this one can't drift. */
+/** DOM ids the three capture targets are given — see track-progress.tsx,
+ *  workout-chart.tsx and workout-summary.tsx. Exported so those files and
+ *  this one can't drift. */
 export const TRACK_CAPTURE_ID = "track-progress-card";
+export const CHART_CAPTURE_ID = "workout-chart-card";
 export const SUMMARY_CAPTURE_ID = "workout-summary-card";
 
 /** Renders one element to a canvas at a crisp, capped device pixel ratio. */
@@ -36,7 +39,7 @@ function elementToCanvas(element: HTMLElement, backgroundColor: string): Promise
 }
 
 /** Stacks canvases top to bottom into one image, centered and padded so the
- *  two cards read as a single summary rather than two loose screenshots. */
+ *  captured cards read as a single summary rather than loose screenshots. */
 function stackCanvases(canvases: HTMLCanvasElement[], background: string): HTMLCanvasElement {
   const gap = 16;
   const padding = 16;
@@ -89,23 +92,31 @@ function downloadBlob(blob: Blob, fileName: string): void {
 }
 
 /**
- * Captures just the track (pace + lap splits) and the workout summary —
- * skipping the live-metrics and workout-controls cards that sit between
- * them on the page — and saves the pair as one PNG.
+ * Captures the track (pace + lap splits), the pace/elevation/heart-rate
+ * chart, and the workout summary's headline stats — skipping the
+ * live-metrics and workout-controls cards, and the heart-rate-zones/FIT-file
+ * card, that sit between and after them on the page — and saves the three
+ * as one stacked PNG, in that order.
  */
 export async function saveWorkoutScreenshot(fileName: string): Promise<void> {
   const track = document.getElementById(TRACK_CAPTURE_ID);
+  const chart = document.getElementById(CHART_CAPTURE_ID);
   const summary = document.getElementById(SUMMARY_CAPTURE_ID);
-  if (!(track instanceof HTMLElement) || !(summary instanceof HTMLElement)) {
-    throw new Error("Could not find the track and workout summary to capture");
+  if (
+    !(track instanceof HTMLElement) ||
+    !(chart instanceof HTMLElement) ||
+    !(summary instanceof HTMLElement)
+  ) {
+    throw new Error("Could not find the track, chart and workout summary to capture");
   }
 
   const background = window.getComputedStyle(document.body).backgroundColor || "#ffffff";
-  const [trackCanvas, summaryCanvas] = await Promise.all([
+  const [trackCanvas, chartCanvas, summaryCanvas] = await Promise.all([
     elementToCanvas(track, background),
+    elementToCanvas(chart, background),
     elementToCanvas(summary, background),
   ]);
-  const combined = stackCanvases([trackCanvas, summaryCanvas], background);
+  const combined = stackCanvases([trackCanvas, chartCanvas, summaryCanvas], background);
   const blob = await canvasToPngBlob(combined);
   downloadBlob(blob, fileName);
 }

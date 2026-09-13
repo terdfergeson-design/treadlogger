@@ -19,7 +19,7 @@ export function formatDuration(totalSeconds: number): string {
 }
 
 /** Metres per international foot, so the conversion below is exact. */
-const METRES_PER_FOOT = 0.3048;
+export const METRES_PER_FOOT = 0.3048;
 export const METRES_PER_MILE = METRES_PER_FOOT * 5280;
 
 /** Total elapsed distance, always in miles to the nearest hundredth. */

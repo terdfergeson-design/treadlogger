@@ -10,6 +10,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { TrackProgress } from "@/components/track-progress";
 import { TreadmillCard } from "@/components/treadmill-card";
 import { TreadmillControls } from "@/components/treadmill-controls";
+import { WorkoutChart } from "@/components/workout-chart";
 import { WorkoutControls } from "@/components/workout-controls";
 import { WorkoutSummary } from "@/components/workout-summary";
 
@@ -44,6 +45,7 @@ export default function Home() {
         </div>
 
         <TrackProgress />
+        <WorkoutChart />
 
         <LiveDashboard />
         <WorkoutControls />

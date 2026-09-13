@@ -12,10 +12,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { formatBytes } from "@/lib/fit/download";
 import {
+  formatCadence,
   formatCalories,
   formatClockTime,
   formatDistance,
   formatDuration,
+  formatElevation,
   formatHeartRate,
   formatPace,
   formatSpeed,
@@ -84,13 +86,15 @@ export function WorkoutSummary() {
         </CardHeader>
 
         <CardContent>
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-5">
             <SummaryStat label="Moving time" value={formatDuration(workout.elapsedS)} />
             <SummaryStat label="Distance" value={`${distance.value} ${distance.unit}`} />
+            <SummaryStat label="Elevation gain" value={`${formatElevation(workout.elevationGainM)} ft`} />
             <SummaryStat
               label="Avg pace"
               value={`${formatPace(workout.avgPaceMinPerKm, DISPLAY_UNIT)} ${paceUnitLabel(DISPLAY_UNIT)}`}
             />
+            <SummaryStat label="Avg cadence" value={`${formatCadence(workout.avgCadenceSpm)} spm`} />
             <SummaryStat label="Calories" value={`${formatCalories(workout.energyKcal)} kcal`} />
             <SummaryStat
               label="Avg speed"

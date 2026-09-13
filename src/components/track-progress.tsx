@@ -163,7 +163,7 @@ const DISPLAY_UNIT = "mph";
 
 /** Rows visible in the lap-split list before it scrolls (see the fixed row
  *  height baked into the row's own className below). */
-const VISIBLE_SPLIT_ROWS = 10;
+const VISIBLE_SPLIT_ROWS = 20;
 
 /**
  * Shared column widths for the split header and every split row, so they
