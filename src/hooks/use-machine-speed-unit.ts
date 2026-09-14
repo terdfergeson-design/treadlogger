@@ -91,7 +91,7 @@ function createPersistedSpeedUnit(
 
 /** The unit the connected machine's Treadmill Data notifications use. */
 export const useMachineSpeedUnit = createPersistedSpeedUnit(
-  "treadlink.machine-speed-unit",
+  "treadlogger.machine-speed-unit",
   DEFAULT_READOUT_SPEED_UNIT,
 );
 
@@ -101,6 +101,6 @@ export const useMachineSpeedUnit = createPersistedSpeedUnit(
  * fields — see `lib/ble/types.ts`).
  */
 export const useCommandSpeedUnit = createPersistedSpeedUnit(
-  "treadlink.command-speed-unit",
+  "treadlogger.command-speed-unit",
   DEFAULT_COMMAND_SPEED_UNIT,
 );

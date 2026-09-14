@@ -22,7 +22,7 @@ export default function Home() {
             <Footprints className="size-5" />
           </span>
           <div>
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Treadlink</h1>
+            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">TreadLogger</h1>
             <p className="text-muted-foreground text-xs sm:text-sm">
               Treadmill workouts over Web Bluetooth, exported as FIT
             </p>

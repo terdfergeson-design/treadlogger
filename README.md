@@ -1,9 +1,9 @@
-# Treadlink
+# TreadLogger
 
 Track and control a Bluetooth treadmill workout from the browser, log heart rate from a chest
 strap, and export the result as a FIT activity file.
 
-Treadlink talks directly to two standard Bluetooth Low Energy services over Web Bluetooth:
+TreadLogger talks directly to two standard Bluetooth Low Energy services over Web Bluetooth:
 
 - **Fitness Machine Service** (`0x1826`) on an FTMS treadmill — reads speed, distance, incline,
   pace, elapsed time and calories, and drives the belt through the Fitness Machine Control Point.
@@ -71,7 +71,7 @@ prompt. There is no way to skip this — it is a deliberate part of the Web Blue
    same time; most treadmills only accept one BLE connection.
 2. Click **Pair treadmill** and pick your machine from the browser's device chooser. Only devices
    advertising the Fitness Machine Service are listed.
-3. Treadlink immediately sends **Request Control**, which is what lets it start the belt and set
+3. TreadLogger immediately sends **Request Control**, which is what lets it start the belt and set
    speed and incline. The card shows *Control granted* once the treadmill agrees. Treadmills can
    refuse or later revoke control — for example when someone touches the console — and the app
    reports that rather than silently failing.
@@ -124,7 +124,7 @@ Before offering the download, the app decodes its own output again and reports t
 check validates the file header, both CRCs and every message definition, which is the same gate an
 importer applies. The summary card shows the verification result and the message counts.
 
-Files are named `treadlink-YYYY-MM-DD-HHMMSS.fit` and can be imported into Garmin Connect, Strava,
+Files are named `treadlogger-YYYY-MM-DD-HHMMSS.fit` and can be imported into Garmin Connect, Strava,
 intervals.icu or anything else that reads FIT activities. Simulated workouts get a `-simulated`
 suffix and are labelled as such inside the file, so they cannot be mistaken for a real run.
 

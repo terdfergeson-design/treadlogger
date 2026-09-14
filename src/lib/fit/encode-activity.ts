@@ -32,7 +32,7 @@ import type { WorkoutSample, WorkoutSnapshot } from "../workout/session";
 
 /** Version reported in file_creator and device_info. */
 const APP_SOFTWARE_VERSION = 1.0;
-const APP_PRODUCT_NAME = "Treadlink";
+const APP_PRODUCT_NAME = "TreadLogger";
 
 /** file_id.product, a free choice under the development manufacturer id. */
 const APP_PRODUCT_ID = 1;
@@ -316,5 +316,5 @@ export function fitFileName(startedAt: Date, simulated = false): string {
     pad(startedAt.getSeconds()),
   ].join("");
 
-  return `treadlink-${stamp}-${time}${simulated ? "-simulated" : ""}.fit`;
+  return `treadlogger-${stamp}-${time}${simulated ? "-simulated" : ""}.fit`;
 }

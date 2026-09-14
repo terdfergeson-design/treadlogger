@@ -321,12 +321,12 @@ describe("fitFileName", () => {
   it("uses a sortable timestamped name", () => {
     const name = fitFileName(new Date(2026, 0, 15, 7, 30, 5));
 
-    expect(name).toBe("treadlink-2026-01-15-073005.fit");
+    expect(name).toBe("treadlogger-2026-01-15-073005.fit");
   });
 
   it("marks simulated workouts in the filename", () => {
     expect(fitFileName(new Date(2026, 0, 15, 7, 30, 5), true)).toBe(
-      "treadlink-2026-01-15-073005-simulated.fit",
+      "treadlogger-2026-01-15-073005-simulated.fit",
     );
   });
 });

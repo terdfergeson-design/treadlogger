@@ -1,5 +1,5 @@
 {
-  "name": "treadlink",
+  "name": "treadlogger",
   "version": "0.1.0",
   "private": true,
   "description": "Web Bluetooth treadmill workout tracker for FTMS treadmills and BLE heart rate straps, with FIT activity export.",

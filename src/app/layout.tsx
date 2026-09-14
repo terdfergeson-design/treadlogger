@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Treadlink — FTMS treadmill workouts with FIT export",
+  title: "TreadLogger — FTMS treadmill workouts with FIT export",
   description:
     "Connect an FTMS treadmill and a Bluetooth heart rate strap from the browser, control your workout, and export it as a FIT activity file.",
 };
