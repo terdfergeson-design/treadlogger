@@ -40,6 +40,10 @@ export function BrowserSupportNotice() {
             Pairing needs Chrome, Edge, Opera or another Chromium browser on desktop or Android.
             Safari and Firefox do not implement Web Bluetooth, and it is unavailable on iOS.
           </p>
+          <p>
+            On a Chromium browser, open <code className="font-mono">chrome://flags</code>, enable{" "}
+            <strong>Experimental Web Platform features</strong>, and relaunch the browser.
+          </p>
           <Button variant="outline" size="sm" onClick={() => setMode("simulator")}>
             <FlaskConical className="size-3.5" />
             Try simulator mode instead

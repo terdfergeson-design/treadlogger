@@ -24,6 +24,7 @@ import { WebBluetoothTreadmill } from "@/lib/ble/web-bluetooth-treadmill";
 import { WebBluetoothHeartRate } from "@/lib/ble/web-bluetooth-heart-rate";
 import { useBluetoothSupport } from "@/hooks/use-bluetooth-support";
 import { useCommandSpeedUnit, useMachineSpeedUnit } from "@/hooks/use-machine-speed-unit";
+import { useWakeLock } from "@/hooks/use-wake-lock";
 import { createSimulator } from "@/lib/mock/simulator";
 import { DEFAULT_RUNNER_PROFILE } from "@/lib/mock/physiology";
 import {
@@ -161,6 +162,11 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     recorder.getSnapshot,
     recorder.getSnapshot,
   );
+
+  // Keeps the screen from locking mid-workout — a paused workout still holds
+  // the lock, since the runner is standing right there deciding what's next,
+  // not walking away.
+  useWakeLock(workout.state === "active" || workout.state === "paused");
 
   useEffect(() => {
     recorder.setMaxHeartRate(maxHeartRateBpm);

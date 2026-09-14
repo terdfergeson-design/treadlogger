@@ -5,6 +5,7 @@ import { CircleCheck, Download, FileDown, ImageDown, Loader2, TriangleAlert } fr
 import { toast } from "sonner";
 
 import { HeartRateZones } from "@/components/heart-rate-zones";
+import { ZoneSettingsPopover } from "@/components/runner-settings";
 import { useWorkout } from "@/components/workout-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -113,7 +114,10 @@ export function WorkoutSummary() {
       <Card className="border-primary/30">
         <CardContent className="space-y-5">
           <div>
-            <h3 className="mb-3 text-sm font-semibold">Time in heart rate zones</h3>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Time in heart rate zones</h3>
+              <ZoneSettingsPopover />
+            </div>
             <HeartRateZones timeInZones={workout.timeInZones} maxHeartRateBpm={maxHeartRateBpm} />
           </div>
 

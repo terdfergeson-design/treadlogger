@@ -5,7 +5,6 @@ import { HeartRateCard } from "@/components/heart-rate-card";
 import { HeartRateZonesPanel } from "@/components/heart-rate-zones-panel";
 import { LiveDashboard } from "@/components/live-dashboard";
 import { ModeSwitcher } from "@/components/mode-switcher";
-import { RunnerSettings } from "@/components/runner-settings";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { TrackProgress } from "@/components/track-progress";
 import { TreadmillCard } from "@/components/treadmill-card";
@@ -53,10 +52,7 @@ export default function Home() {
 
         <div className="grid gap-4 lg:grid-cols-2">
           <TreadmillControls />
-          <div className="space-y-4">
-            <HeartRateZonesPanel />
-            <RunnerSettings />
-          </div>
+          <HeartRateZonesPanel />
         </div>
       </div>
 

@@ -1,8 +1,16 @@
 "use client";
 
 import { HeartRateZones } from "@/components/heart-rate-zones";
+import { ZoneSettingsPopover } from "@/components/runner-settings";
 import { useWorkout } from "@/components/workout-provider";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 /** Live zone breakdown. Hidden after a workout, where the summary shows it. */
 export function HeartRateZonesPanel() {
@@ -15,6 +23,9 @@ export function HeartRateZonesPanel() {
       <CardHeader>
         <CardTitle className="text-base">Heart rate zones</CardTitle>
         <CardDescription>Time accumulated in each zone during this workout.</CardDescription>
+        <CardAction>
+          <ZoneSettingsPopover />
+        </CardAction>
       </CardHeader>
       <CardContent>
         <HeartRateZones
