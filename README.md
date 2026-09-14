@@ -43,6 +43,23 @@ easiest way).
 
 The app detects both problems and explains them in place, offering simulator mode as a way through.
 
+### Chrome flags as a workaround
+
+Two `chrome://flags` entries can stand in for the requirements above when you just need to test on
+a phone, without deploying or tunneling anything:
+
+- **Experimental Web Platform features**
+  (`chrome://flags/#enable-experimental-web-platform-features`) — enable it and relaunch the
+  browser if `navigator.bluetooth` isn't available at all, which some Chromium builds require even
+  on an otherwise-supported browser.
+- **Insecure origins treated as secure**
+  (`chrome://flags/#unsafely-treat-insecure-origin-as-secure`) — enable it, add the LAN address
+  you're testing from (e.g. `http://192.168.1.20:43117`), and relaunch. This treats that one
+  plain-HTTP origin as a secure context, so Bluetooth works over LAN without https or a tunnel.
+
+Both are per-device, per-browser settings meant for development — not something a normal visitor
+to a deployed instance of the app would ever need to touch.
+
 ## Pairing your devices
 
 The browser asks for permission once per device, so the treadmill and the strap each need their own
