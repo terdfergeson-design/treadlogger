@@ -62,54 +62,11 @@ to a deployed instance of the app would ever need to touch.
 
 ## Installing as an Android app
 
-Because there's no build step that differs from the browser version, "the Android app" is this same
-site, installed two different ways depending on how official you want it to feel.
-
-**Add to Home Screen (PWA install).** The deployed site (`public/manifest.webmanifest`, linked from
-`src/app/layout.tsx`) is an installable PWA — open it in Chrome on Android and use **Install app** /
-**Add to Home Screen**. It then launches full-screen with its own icon and app-switcher entry. This
-is still literally Chrome under the hood, so Web Bluetooth keeps working exactly as it does in a
-normal tab — nothing about the BLE or FIT code changes for this path.
-
-**Trusted Web Activity (Play Store package).** For a real installable `.apk`/`.aab`, wrap the
-deployed PWA as a TWA with [Bubblewrap](https://github.com/GoogleChromeLabs/bubblewrap). A TWA still
-renders through the device's installed Chrome (not a stripped-down WebView), so this is packaging,
-not porting — none of `src/lib/ble` changes either. Once the manifest above is live on the deployed
-site:
-
-```bash
-npx @bubblewrap/cli@latest init --manifest https://treadlogger-sooty.vercel.app/manifest.webmanifest
-npx @bubblewrap/cli@latest build
-```
-
-`npx` runs the CLI without a global install, downloading it fresh into a local cache the first time
-(subsequent runs reuse that cache, so it isn't slow twice). If `npm install -g @bubblewrap/cli` fails
-for you with an `E404` on a package name like `@bubblewrap/cli~`, that's a stray character introduced
-somewhere between typing and the shell, not a problem with the package itself — `npx` sidesteps it
-entirely and never leaves a global package behind to clean up.
-
-`init` downloads a JDK and the Android SDK on first run (it asks first) and scaffolds a
-`twa-manifest.json` from the live manifest — name, icons and theme color all come from what's
-already in `public/`. `build` produces both a debug-signed `.apk` (sideload it straight to a phone
-with `adb install app-release-signed.apk` to test) and a `.aab` for the Play Store, plus an upload
-keystore under `./android.keystore` — back that up; losing it means losing the ability to publish
-updates to the same Play Store listing.
-
-The one extra step a TWA needs that a plain PWA doesn't: a **Digital Asset Links** file at
-`public/.well-known/assetlinks.json`, proving this domain owns the Android package. `bubblewrap
-build` registers your upload keystore's SHA-256 fingerprint in the project config, but doesn't print
-or write the JSON itself — `bubblewrap fingerprint` is a command *group*, so it needs a subcommand:
-
-```bash
-npx @bubblewrap/cli@latest fingerprint list                 # see the registered fingerprint(s)
-npx @bubblewrap/cli@latest fingerprint generateAssetLinks    # generate the assetlinks.json content
-```
-
-Add `--output <path>` to `generateAssetLinks` to write the file directly, then copy it into
-`public/.well-known/assetlinks.json` in this repo (it's generated inside the Bubblewrap/Android
-project folder, not this one). It has to be live on the deployed site — Chrome checks
-`https://treadlogger-sooty.vercel.app/.well-known/assetlinks.json` before it'll drop the address
-bar — so add it, commit, and let Vercel redeploy before testing the installed app.
+The deployed site (`public/manifest.webmanifest`, linked from `src/app/layout.tsx`) is an
+installable PWA — open it in Chrome on Android and use **Install app** / **Add to Home Screen**. It
+then launches full-screen with its own icon and app-switcher entry. This is still literally Chrome
+under the hood, so Web Bluetooth keeps working exactly as it does in a normal tab — nothing about
+the BLE or FIT code changes for this path.
 
 ## Pairing your devices
 
