@@ -1,9 +1,12 @@
 "use client";
 
-import { Gauge, Minus, Plus, Settings, TrendingUp } from "lucide-react";
+import { useEffect, useState, type KeyboardEvent } from "react";
+
+import { Gauge, Minus, Plus, RotateCcw, Settings, SlidersHorizontal, TrendingUp, Zap } from "lucide-react";
 
 import { useWorkout } from "@/components/workout-provider";
 import { useDraftValue } from "@/hooks/use-draft-value";
+import { useInclinePresets, useSpeedPresets } from "@/hooks/use-belt-presets";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -13,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
@@ -21,6 +25,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -63,6 +68,12 @@ export function TreadmillControls() {
     commandSpeedUnit,
     setCommandSpeedUnit,
   } = useWorkout();
+  const { values: speedPresets, setValue: setSpeedPreset, reset: resetSpeedPresets } = useSpeedPresets();
+  const {
+    values: inclinePresets,
+    setValue: setInclinePreset,
+    reset: resetInclinePresets,
+  } = useInclinePresets();
 
   const connected = treadmill.connection === "connected";
   const inclineSupported = treadmill.features?.targets.inclination ?? true;
@@ -78,6 +89,15 @@ export function TreadmillControls() {
   // currency (and separately, whatever the machine's own GATT fields need).
   const shown = (speedKph: number) => Number(toMachineSpeed(speedKph, DISPLAY_UNIT).toFixed(2));
   const commanded = (shownSpeed: number) => fromMachineSpeed(shownSpeed, DISPLAY_UNIT);
+
+  // Speed presets are gated exactly like the speed slider — including the
+  // pre-start lock. Incline presets follow the incline slider's own,
+  // looser rule instead: no workout-running requirement.
+  const speedPresetsDisabled = !connected || !speedSupported || !workoutRunning;
+  const inclinePresetsDisabled = !connected || !inclineSupported;
+
+  const applySpeedPreset = (speedMph: number) => void setTargetSpeed(commanded(speedMph));
+  const applyInclinePreset = (inclinePercent: number) => void setTargetIncline(inclinePercent);
 
   return (
     <Card>
@@ -126,6 +146,61 @@ export function TreadmillControls() {
       </CardHeader>
 
       <CardContent className="space-y-6">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide">
+              <Zap className="size-3.5" />
+              Quick presets
+            </span>
+            <PresetSettingsPopover
+              speedPresets={speedPresets}
+              setSpeedPreset={setSpeedPreset}
+              resetSpeedPresets={resetSpeedPresets}
+              speedMax={shown(speedRange.maxKph)}
+              inclinePresets={inclinePresets}
+              setInclinePreset={setInclinePreset}
+              resetInclinePresets={resetInclinePresets}
+              inclineMax={inclineRange.maxPercent}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-muted-foreground text-[10px] uppercase tracking-wide">Speed</p>
+            <div className="grid grid-cols-3 gap-2">
+              {speedPresets.map((speedMph, index) => (
+                <PresetButton
+                  key={index}
+                  value={speedMph}
+                  unit="mph"
+                  disabled={speedPresetsDisabled}
+                  onApply={() => applySpeedPreset(speedMph)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-muted-foreground text-[10px] uppercase tracking-wide">Incline</p>
+            <div className="grid grid-cols-3 gap-2">
+              {inclinePresets.map((inclinePercent, index) => (
+                <PresetButton
+                  key={index}
+                  value={inclinePercent}
+                  unit="%"
+                  disabled={inclinePresetsDisabled}
+                  onApply={() => applyInclinePreset(inclinePercent)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <p className="text-muted-foreground text-[11px]">
+            {connected
+              ? "Speed presets apply once the workout starts — this treadmill always begins at 0.5 mph. Incline presets apply anytime."
+              : "Connect a treadmill to use presets."}
+          </p>
+        </div>
+
         <ControlRow
           icon={Gauge}
           label="Target speed"
@@ -322,6 +397,229 @@ function ControlRow({
       </p>
     </div>
   );
+}
+
+/**
+ * One quick-dial button: taps a single preset value (speed or incline) in.
+ *
+ * Tapping it doesn't change how the button itself looks (its value doesn't
+ * track anything live, unlike the slider above it), so without some kind of
+ * acknowledgment a tap can look like it did nothing. `justApplied` flashes
+ * the button to the app's primary green for a moment and fades back, purely
+ * as a "yes, that registered" cue — it's local UI state, not tied to whether
+ * the treadmill actually accepted the command (that's what the toasts from
+ * `guard()` in `workout-provider.tsx` are for).
+ */
+function PresetButton({
+  value,
+  unit,
+  disabled,
+  onApply,
+}: {
+  value: number;
+  unit: string;
+  disabled: boolean;
+  onApply: () => void;
+}) {
+  const [justApplied, setJustApplied] = useState(false);
+
+  useEffect(() => {
+    if (!justApplied) return;
+    const timer = setTimeout(() => setJustApplied(false), 350);
+    return () => clearTimeout(timer);
+  }, [justApplied]);
+
+  const handleClick = () => {
+    onApply();
+    setJustApplied(true);
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      disabled={disabled}
+      onClick={handleClick}
+      className={`h-auto flex-col gap-0.5 py-3 leading-tight transition-colors duration-300 ${
+        justApplied ? "border-primary bg-primary/15 text-primary" : ""
+      }`}
+    >
+      <span className="font-mono text-lg font-bold tabular-nums">{formatPresetValue(value)}</span>
+      <span className={`text-xs font-normal ${justApplied ? "text-primary" : "text-muted-foreground"}`}>
+        {unit}
+      </span>
+    </Button>
+  );
+}
+
+/** Trims a trailing ".0" (5 rather than 5.0) without ever rounding away a real decimal. */
+function formatPresetValue(value: number): string {
+  return Number(value.toFixed(1)).toString();
+}
+
+/**
+ * A free-typing text draft for one numeric preset field, re-synced from the
+ * outside (e.g. "Reset to defaults", or another field's commit) whenever the
+ * source value actually changes.
+ *
+ * This deliberately isn't `type="number"` bound straight to a numeric draft:
+ * a controlled number input snaps an in-progress edit like "7." or a cleared
+ * field back to its last valid numeric value on every keystroke, since
+ * neither parses to a number, which makes it impossible to select-all and
+ * retype. Holding the raw string instead — parsed only on commit — lets the
+ * field be edited freely.
+ */
+function usePresetFieldDraft(value: number): [string, (next: string) => void] {
+  const [draft, setDraft] = useState(() => formatPresetValue(value));
+  const [lastValue, setLastValue] = useState(value);
+
+  if (value !== lastValue) {
+    setLastValue(value);
+    setDraft(formatPresetValue(value));
+  }
+
+  return [draft, setDraft];
+}
+
+/** Gear-style popover for editing what each speed and incline preset button dials in. */
+function PresetSettingsPopover({
+  speedPresets,
+  setSpeedPreset,
+  resetSpeedPresets,
+  speedMax,
+  inclinePresets,
+  setInclinePreset,
+  resetInclinePresets,
+  inclineMax,
+}: {
+  speedPresets: number[];
+  setSpeedPreset: (index: number, value: number) => void;
+  resetSpeedPresets: () => void;
+  speedMax: number;
+  inclinePresets: number[];
+  setInclinePreset: (index: number, value: number) => void;
+  resetInclinePresets: () => void;
+  inclineMax: number;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        aria-label="Preset settings"
+        className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
+      >
+        <SlidersHorizontal className="size-3.5" />
+      </PopoverTrigger>
+      <PopoverContent align="end">
+        <PopoverHeader>
+          <PopoverTitle>Preset settings</PopoverTitle>
+          <PopoverDescription>Set what each quick-preset button dials in.</PopoverDescription>
+        </PopoverHeader>
+
+        <div className="max-h-80 space-y-4 overflow-y-auto pt-1 pr-1">
+          <div className="space-y-1.5">
+            <p className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+              Speed (mph)
+            </p>
+            {speedPresets.map((value, index) => (
+              <PresetNumberField
+                key={index}
+                index={index}
+                value={value}
+                max={speedMax}
+                unit="mph"
+                onChange={(next) => setSpeedPreset(index, next)}
+              />
+            ))}
+          </div>
+
+          <Separator />
+
+          <div className="space-y-1.5">
+            <p className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+              Incline (%)
+            </p>
+            {inclinePresets.map((value, index) => (
+              <PresetNumberField
+                key={index}
+                index={index}
+                value={value}
+                max={inclineMax}
+                unit="%"
+                onChange={(next) => setInclinePreset(index, next)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="flex-1" onClick={resetSpeedPresets}>
+            <RotateCcw className="size-3.5" />
+            Reset speed
+          </Button>
+          <Button variant="outline" size="sm" className="flex-1" onClick={resetInclinePresets}>
+            <RotateCcw className="size-3.5" />
+            Reset incline
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** One editable row: a preset's index, a single value field, and its unit. */
+function PresetNumberField({
+  index,
+  value,
+  max,
+  unit,
+  onChange,
+}: {
+  index: number;
+  value: number;
+  max: number;
+  unit: string;
+  onChange: (value: number) => void;
+}) {
+  const [draft, setDraft] = usePresetFieldDraft(value);
+
+  const commit = () => {
+    const parsed = Number.parseFloat(draft);
+    const next = clampValue(Number.isFinite(parsed) ? parsed : value, 0, Math.max(max, 0));
+
+    setDraft(formatPresetValue(next));
+    if (next !== value) onChange(next);
+  };
+
+  const commitOnEnter = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") event.currentTarget.blur();
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className="text-muted-foreground w-4 shrink-0 text-right font-mono text-[11px]"
+        aria-hidden
+      >
+        {index + 1}
+      </span>
+
+      <Input
+        type="text"
+        inputMode="decimal"
+        aria-label={`Preset ${index + 1}, ${unit}`}
+        className="h-7 flex-1 px-2 text-xs"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={commitOnEnter}
+      />
+      <span className="text-muted-foreground w-7 shrink-0 text-[10px]">{unit}</span>
+    </div>
+  );
+}
+
+function clampValue(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 /** The slider reports a single value or an array depending on its arity. */
