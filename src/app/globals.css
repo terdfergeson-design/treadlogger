@@ -48,73 +48,94 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * Colors below are plain sRGB rgb()/rgba(), not oklch(), even though the
+ * shadcn/Tailwind v4 default theme normally authors them in OKLCH. Each value
+ * here is the exact sRGB equivalent the browser itself resolves the
+ * corresponding oklch() color to (verified via getComputedStyle's own
+ * color-mix(in srgb, ...) conversion) — so this is a lossless, visually
+ * identical swap, not a color change.
+ *
+ * Why: html2canvas-pro (used by src/lib/screenshot/capture.ts to rasterize
+ * the downloadable workout screenshot) has its own OKLab/OKLCH-to-sRGB
+ * conversion math, separate from the browser's, and it renders this theme's
+ * dark, low-chroma grays roughly 2x too light — confirmed by sampling actual
+ * pixels from a downloaded screenshot against the true colors. This first
+ * showed up as an indirect symptom (Lightning CSS downgrading oklch() to
+ * lab() in production, which html2canvas-pro mishandles even worse), fixed
+ * by pinning a `browserslist` in package.json — but the same ~2x-too-light
+ * rendering turned up again even with genuine oklch() reaching the browser,
+ * meaning html2canvas-pro's oklch handling itself isn't reliable for this
+ * theme's colors. Plain rgb()/rgba() sidesteps its color-space conversion
+ * pipeline entirely, so there's no color math left for it to get wrong.
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.56 0.15 149);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.56 0.15 149);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --background: rgb(255, 255, 255);
+  --foreground: rgb(10, 10, 10);
+  --card: rgb(255, 255, 255);
+  --card-foreground: rgb(10, 10, 10);
+  --popover: rgb(255, 255, 255);
+  --popover-foreground: rgb(10, 10, 10);
+  --primary: rgb(23, 139, 63);
+  --primary-foreground: rgb(250, 250, 250);
+  --secondary: rgb(245, 245, 245);
+  --secondary-foreground: rgb(23, 23, 23);
+  --muted: rgb(245, 245, 245);
+  --muted-foreground: rgb(115, 115, 115);
+  --accent: rgb(245, 245, 245);
+  --accent-foreground: rgb(23, 23, 23);
+  --destructive: rgb(231, 0, 11);
+  --border: rgb(229, 229, 229);
+  --input: rgb(229, 229, 229);
+  --ring: rgb(23, 139, 63);
+  --chart-1: rgb(212, 212, 212);
+  --chart-2: rgb(115, 115, 115);
+  --chart-3: rgb(82, 82, 82);
+  --chart-4: rgb(64, 64, 64);
+  --chart-5: rgb(38, 38, 38);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: rgb(250, 250, 250);
+  --sidebar-foreground: rgb(10, 10, 10);
+  --sidebar-primary: rgb(23, 23, 23);
+  --sidebar-primary-foreground: rgb(250, 250, 250);
+  --sidebar-accent: rgb(245, 245, 245);
+  --sidebar-accent-foreground: rgb(23, 23, 23);
+  --sidebar-border: rgb(229, 229, 229);
+  --sidebar-ring: rgb(161, 161, 161);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.79 0.19 149);
-  --primary-foreground: oklch(0.19 0.05 152);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.79 0.19 149);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: rgb(10, 10, 10);
+  --foreground: rgb(250, 250, 250);
+  --card: rgb(23, 23, 23);
+  --card-foreground: rgb(250, 250, 250);
+  --popover: rgb(23, 23, 23);
+  --popover-foreground: rgb(250, 250, 250);
+  --primary: rgb(74, 219, 114);
+  --primary-foreground: rgb(0, 26, 8);
+  --secondary: rgb(38, 38, 38);
+  --secondary-foreground: rgb(250, 250, 250);
+  --muted: rgb(38, 38, 38);
+  --muted-foreground: rgb(161, 161, 161);
+  --accent: rgb(38, 38, 38);
+  --accent-foreground: rgb(250, 250, 250);
+  --destructive: rgb(255, 100, 103);
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.15);
+  --ring: rgb(74, 219, 114);
+  --chart-1: rgb(212, 212, 212);
+  --chart-2: rgb(115, 115, 115);
+  --chart-3: rgb(82, 82, 82);
+  --chart-4: rgb(64, 64, 64);
+  --chart-5: rgb(38, 38, 38);
+  --sidebar: rgb(23, 23, 23);
+  --sidebar-foreground: rgb(250, 250, 250);
+  --sidebar-primary: rgb(20, 71, 230);
+  --sidebar-primary-foreground: rgb(250, 250, 250);
+  --sidebar-accent: rgb(38, 38, 38);
+  --sidebar-accent-foreground: rgb(250, 250, 250);
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: rgb(115, 115, 115);
 }
 
 @layer base {
