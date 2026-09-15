@@ -116,8 +116,14 @@ const SERIES: SeriesDef[] = [
     // oklch colors wrong in the downloaded screenshot. These are the exact
     // sRGB values the browser already resolves sky-500/sky-400 to, so this
     // is a no-op on screen — see the comment block in globals.css.
+    //
+    // The fill below is a literal rgba(), not `fill-[#00a6f4]/10`: Tailwind
+    // v4 compiles a hex-plus-opacity-modifier arbitrary value to oklab() (to
+    // do the alpha mixing), which reintroduces the exact same html2canvas-pro
+    // color bug this whole literal-hex approach exists to avoid. A pre-built
+    // rgba() in brackets has nothing left for Tailwind to convert.
     stroke: "stroke-[#00a6f4] dark:stroke-[#00bcff]",
-    fill: "fill-[#00a6f4]/10",
+    fill: "fill-[rgba(0,166,244,0.1)]",
     dot: "bg-[#00a6f4] dark:bg-[#00bcff]",
     text: "text-[#00a6f4] dark:text-[#00bcff]",
     value: (sample) => {
@@ -135,9 +141,10 @@ const SERIES: SeriesDef[] = [
     unit: "ft",
     icon: Mountain,
     // See the pace series above: literal hex to dodge html2canvas-pro's
-    // oklch-conversion bug, equivalent to amber-500/400/600.
+    // oklch-conversion bug, equivalent to amber-500/400/600. Fill is a
+    // literal rgba() for the same reason noted there.
     stroke: "stroke-[#fe9a00] dark:stroke-[#ffb900]",
-    fill: "fill-[#fe9a00]/10",
+    fill: "fill-[rgba(254,154,0,0.1)]",
     dot: "bg-[#fe9a00] dark:bg-[#ffb900]",
     text: "text-[#e17100] dark:text-[#ffb900]",
     value: (sample) => (sample.elevationM ?? 0) / METRES_PER_FOOT,
@@ -150,9 +157,10 @@ const SERIES: SeriesDef[] = [
     unit: "bpm",
     icon: Heart,
     // See the pace series above: literal hex to dodge html2canvas-pro's
-    // oklch-conversion bug, equivalent to rose-500/400.
+    // oklch-conversion bug, equivalent to rose-500/400. Fill is a literal
+    // rgba() for the same reason noted there.
     stroke: "stroke-[#ff2056] dark:stroke-[#ff637e]",
-    fill: "fill-[#ff2056]/10",
+    fill: "fill-[rgba(255,32,86,0.1)]",
     dot: "bg-[#ff2056] dark:bg-[#ff637e]",
     text: "text-[#ff2056] dark:text-[#ff637e]",
     value: (sample) => sample.heartRateBpm,

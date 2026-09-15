@@ -35,6 +35,22 @@ function elementToCanvas(element: HTMLElement, backgroundColor: string): Promise
   return html2canvas(element, {
     backgroundColor,
     scale: Math.min(2, window.devicePixelRatio || 1),
+    // html2canvas-pro doesn't render Tailwind's `ring` utility (the
+    // box-shadow-based outline the Card component uses — see
+    // `ring-foreground/10` in ui/card.tsx) as a thin outline: it paints the
+    // ring's low-opacity color as a full overlay across the whole element
+    // instead, roughly doubling every card's background brightness in the
+    // downloaded PNG (rgb(23,23,23) came out rgb(46,46,46) — confirmed by
+    // sampling actual pixels with and without the ring present). `onclone`
+    // lets html2canvas-pro's own DOM clone — used only for this capture,
+    // never the live page — have its box-shadow stripped before rendering,
+    // so the on-screen ring is untouched and the screenshot's card
+    // backgrounds come out the correct color.
+    onclone: (clonedDoc) => {
+      clonedDoc.querySelectorAll<HTMLElement>('[data-slot="card"]').forEach((card) => {
+        card.style.boxShadow = "none";
+      });
+    },
   });
 }
 
