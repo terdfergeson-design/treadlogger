@@ -111,10 +111,15 @@ const SERIES: SeriesDef[] = [
     label: "Pace",
     unit: "/mi",
     icon: Zap,
-    stroke: "stroke-sky-500 dark:stroke-sky-400",
-    fill: "fill-sky-500/10",
-    dot: "bg-sky-500 dark:bg-sky-400",
-    text: "text-sky-500 dark:text-sky-400",
+    // Literal hex, not Tailwind's sky-500/400 palette classes: those compile
+    // to oklch(), and html2canvas-pro (see capture.ts) renders this app's
+    // oklch colors wrong in the downloaded screenshot. These are the exact
+    // sRGB values the browser already resolves sky-500/sky-400 to, so this
+    // is a no-op on screen — see the comment block in globals.css.
+    stroke: "stroke-[#00a6f4] dark:stroke-[#00bcff]",
+    fill: "fill-[#00a6f4]/10",
+    dot: "bg-[#00a6f4] dark:bg-[#00bcff]",
+    text: "text-[#00a6f4] dark:text-[#00bcff]",
     value: (sample) => {
       const paceMinPerKm = paceFromSpeed(sample.speedKph);
       if (paceMinPerKm === undefined) return undefined;
@@ -129,10 +134,12 @@ const SERIES: SeriesDef[] = [
     label: "Elevation",
     unit: "ft",
     icon: Mountain,
-    stroke: "stroke-amber-500 dark:stroke-amber-400",
-    fill: "fill-amber-500/10",
-    dot: "bg-amber-500 dark:bg-amber-400",
-    text: "text-amber-600 dark:text-amber-400",
+    // See the pace series above: literal hex to dodge html2canvas-pro's
+    // oklch-conversion bug, equivalent to amber-500/400/600.
+    stroke: "stroke-[#fe9a00] dark:stroke-[#ffb900]",
+    fill: "fill-[#fe9a00]/10",
+    dot: "bg-[#fe9a00] dark:bg-[#ffb900]",
+    text: "text-[#e17100] dark:text-[#ffb900]",
     value: (sample) => (sample.elevationM ?? 0) / METRES_PER_FOOT,
     formatValue: (value) => `${value > 0 ? "+" : ""}${Math.round(value)}`,
     formatTick: (value) => `${Math.round(value)}`,
@@ -142,10 +149,12 @@ const SERIES: SeriesDef[] = [
     label: "Heart rate",
     unit: "bpm",
     icon: Heart,
-    stroke: "stroke-rose-500 dark:stroke-rose-400",
-    fill: "fill-rose-500/10",
-    dot: "bg-rose-500 dark:bg-rose-400",
-    text: "text-rose-500 dark:text-rose-400",
+    // See the pace series above: literal hex to dodge html2canvas-pro's
+    // oklch-conversion bug, equivalent to rose-500/400.
+    stroke: "stroke-[#ff2056] dark:stroke-[#ff637e]",
+    fill: "fill-[#ff2056]/10",
+    dot: "bg-[#ff2056] dark:bg-[#ff637e]",
+    text: "text-[#ff2056] dark:text-[#ff637e]",
     value: (sample) => sample.heartRateBpm,
     formatValue: (value) => formatHeartRate(value),
     formatTick: (value) => `${Math.round(value)}`,
