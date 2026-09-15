@@ -60,6 +60,43 @@ a phone, without deploying or tunneling anything:
 Both are per-device, per-browser settings meant for development — not something a normal visitor
 to a deployed instance of the app would ever need to touch.
 
+## Installing as an Android app
+
+Because there's no build step that differs from the browser version, "the Android app" is this same
+site, installed two different ways depending on how official you want it to feel.
+
+**Add to Home Screen (PWA install).** The deployed site (`public/manifest.webmanifest`, linked from
+`src/app/layout.tsx`) is an installable PWA — open it in Chrome on Android and use **Install app** /
+**Add to Home Screen**. It then launches full-screen with its own icon and app-switcher entry. This
+is still literally Chrome under the hood, so Web Bluetooth keeps working exactly as it does in a
+normal tab — nothing about the BLE or FIT code changes for this path.
+
+**Trusted Web Activity (Play Store package).** For a real installable `.apk`/`.aab`, wrap the
+deployed PWA as a TWA with [Bubblewrap](https://github.com/GoogleChromeLabs/bubblewrap). A TWA still
+renders through the device's installed Chrome (not a stripped-down WebView), so this is packaging,
+not porting — none of `src/lib/ble` changes either. Once the manifest above is live on the deployed
+site:
+
+```bash
+npm install -g @bubblewrap/cli
+bubblewrap init --manifest https://treadlogger-sooty.vercel.app/manifest.webmanifest
+bubblewrap build
+```
+
+`init` downloads a JDK and the Android SDK on first run (it asks first) and scaffolds a
+`twa-manifest.json` from the live manifest — name, icons and theme color all come from what's
+already in `public/`. `build` produces both a debug-signed `.apk` (sideload it straight to a phone
+with `adb install app-release-signed.apk` to test) and a `.aab` for the Play Store, plus an upload
+keystore under `./android.keystore` — back that up; losing it means losing the ability to publish
+updates to the same Play Store listing.
+
+The one extra step a TWA needs that a plain PWA doesn't: a **Digital Asset Links** file at
+`public/.well-known/assetlinks.json`, proving this domain owns the Android package. `bubblewrap
+build` prints the exact JSON to paste in, keyed off the keystore's SHA-256 fingerprint (re-run
+`bubblewrap fingerprint` any time to see it again). It has to be live on the deployed site — Chrome
+checks `https://treadlogger-sooty.vercel.app/.well-known/assetlinks.json` before it'll drop the
+address bar — so add it, commit, and let Vercel redeploy before testing the installed app.
+
 ## Pairing your devices
 
 The browser asks for permission once per device, so the treadmill and the strap each need their own
