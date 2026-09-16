@@ -47,6 +47,32 @@ import { speedUnitLabel } from "@/lib/format";
 const DISPLAY_UNIT = "mph";
 
 /**
+ * Step size for the quick nudge buttons above the presets. Deliberately fixed
+ * and independent of the connected machine's own increment
+ * (`speedRange.incrementKph` / `inclineRange.incrementPercent`), which only
+ * governs the grid the slider below snaps to.
+ */
+const SPEED_NUDGE_MPH = 0.1;
+const INCLINE_NUDGE_PERCENT = 1;
+
+/**
+ * Shared "just applied" flash for every outline-variant +/- button on this
+ * card (the slider steppers in `ControlRow`, and `NudgeButton`/`PresetButton`
+ * above the sliders) — a brief flash to the app's primary green as a "yes,
+ * that registered" cue.
+ *
+ * The `outline` variant sets its own background for every one of these
+ * states (`bg-background`, `dark:bg-input/30`, `hover:bg-muted`,
+ * `dark:hover:bg-input/50`); `cn()`'s tailwind-merge only drops a class when
+ * another one shares its *exact* modifiers, so this has to restate every
+ * modifier combination the variant uses, or it silently loses to whichever
+ * of those applies (most often the dark or hover variant, since a plain
+ * `bg-primary/30` matches neither).
+ */
+const FLASH_CLASSES =
+  "border-primary bg-primary/30 hover:bg-primary/30 dark:border-primary dark:bg-primary/30 dark:hover:bg-primary/30";
+
+/**
  * Speed and incline control.
  *
  * Every change is a write to the FTMS control point, so the slider commits on
@@ -99,6 +125,34 @@ export function TreadmillControls() {
   const applySpeedPreset = (speedMph: number) => void setTargetSpeed(commanded(speedMph));
   const applyInclinePreset = (inclinePercent: number) => void setTargetIncline(inclinePercent);
 
+  // Nudges act on the committed target directly, the same way a preset does,
+  // rather than on the speed/incline sliders' own local drafts — the sliders
+  // pick that committed value back up via `useDraftValue` once the provider
+  // updates it, exactly as they already do after a preset tap.
+  const nudgeSpeed = (deltaMph: number) => {
+    const current = shown(targetSpeedKph);
+    const next = clampValue(
+      Number((current + deltaMph).toFixed(2)),
+      shown(speedRange.minKph),
+      shown(speedRange.maxKph),
+    );
+    void setTargetSpeed(commanded(next));
+  };
+
+  const nudgeIncline = (deltaPercent: number) => {
+    const next = clampValue(
+      Number((targetInclinePercent + deltaPercent).toFixed(1)),
+      inclineRange.minPercent,
+      inclineRange.maxPercent,
+    );
+    void setTargetIncline(next);
+  };
+
+  const speedAtMin = shown(targetSpeedKph) <= shown(speedRange.minKph);
+  const speedAtMax = shown(targetSpeedKph) >= shown(speedRange.maxKph);
+  const inclineAtMin = targetInclinePercent <= inclineRange.minPercent;
+  const inclineAtMax = targetInclinePercent >= inclineRange.maxPercent;
+
   return (
     <Card>
       <CardHeader>
@@ -146,6 +200,37 @@ export function TreadmillControls() {
       </CardHeader>
 
       <CardContent className="space-y-6">
+        <div className="grid grid-cols-4 gap-2">
+          <NudgeButton
+            direction="decrease"
+            icon={Minus}
+            label="Speed"
+            disabled={speedPresetsDisabled || speedAtMin}
+            onClick={() => nudgeSpeed(-SPEED_NUDGE_MPH)}
+          />
+          <NudgeButton
+            direction="increase"
+            icon={Plus}
+            label="Speed"
+            disabled={speedPresetsDisabled || speedAtMax}
+            onClick={() => nudgeSpeed(SPEED_NUDGE_MPH)}
+          />
+          <NudgeButton
+            direction="decrease"
+            icon={Minus}
+            label="Incline"
+            disabled={inclinePresetsDisabled || inclineAtMin}
+            onClick={() => nudgeIncline(-INCLINE_NUDGE_PERCENT)}
+          />
+          <NudgeButton
+            direction="increase"
+            icon={Plus}
+            label="Incline"
+            disabled={inclinePresetsDisabled || inclineAtMax}
+            onClick={() => nudgeIncline(INCLINE_NUDGE_PERCENT)}
+          />
+        </div>
+
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide">
@@ -333,11 +418,23 @@ function ControlRow({
   // flows back in from the provider once the treadmill has accepted it.
   const [draft, setDraft] = useDraftValue(value);
 
+  // Same "just applied" flash as the preset/nudge buttons above the sliders —
+  // tracks which of the two stepper buttons was tapped, since each needs to
+  // flash independently of the other.
+  const [flash, setFlash] = useState<"decrease" | "increase" | null>(null);
+
+  useEffect(() => {
+    if (!flash) return;
+    const timer = setTimeout(() => setFlash(null), 350);
+    return () => clearTimeout(timer);
+  }, [flash]);
+
   const clamp = (next: number) => Math.min(max, Math.max(min, next));
-  const nudge = (delta: number) => {
+  const nudge = (delta: number, direction: "decrease" | "increase") => {
     const next = Number(clamp(draft + delta).toFixed(2));
     setDraft(next);
     void onCommit(next);
+    setFlash(direction);
   };
 
   return (
@@ -357,10 +454,12 @@ function ControlRow({
         <Button
           variant="outline"
           size="icon"
-          className="size-9 shrink-0"
+          className={`size-9 shrink-0 transition-colors duration-300 ${
+            flash === "decrease" ? FLASH_CLASSES : ""
+          }`}
           aria-label={`Decrease ${label.toLowerCase()}`}
           disabled={disabled || draft <= min}
-          onClick={() => nudge(-step)}
+          onClick={() => nudge(-step, "decrease")}
         >
           <Minus className="size-4" />
         </Button>
@@ -380,10 +479,12 @@ function ControlRow({
         <Button
           variant="outline"
           size="icon"
-          className="size-9 shrink-0"
+          className={`size-9 shrink-0 transition-colors duration-300 ${
+            flash === "increase" ? FLASH_CLASSES : ""
+          }`}
           aria-label={`Increase ${label.toLowerCase()}`}
           disabled={disabled || draft >= max}
-          onClick={() => nudge(step)}
+          onClick={() => nudge(step, "increase")}
         >
           <Plus className="size-4" />
         </Button>
@@ -396,6 +497,61 @@ function ControlRow({
             : `Range ${min.toFixed(decimals)}–${max.toFixed(decimals)} ${unit}`)}
       </p>
     </div>
+  );
+}
+
+/**
+ * One nudge button from the row of four above the presets: decrease/increase
+ * speed by `SPEED_NUDGE_MPH`, or decrease/increase incline by
+ * `INCLINE_NUDGE_PERCENT`. Acts on the committed target directly (see
+ * `nudgeSpeed`/`nudgeIncline` in `TreadmillControls`), the same way a preset
+ * does, so it's disabled under the same conditions as the matching preset
+ * row and slider, plus at either end of the machine's own range.
+ *
+ * Flashes to the app's primary green on tap — the same `justApplied` cue
+ * `PresetButton` uses, since a nudge is just as silent about whether it
+ * registered (its icon and label don't otherwise track anything live).
+ */
+function NudgeButton({
+  direction,
+  icon: Icon,
+  label,
+  disabled,
+  onClick,
+}: {
+  direction: "decrease" | "increase";
+  icon: typeof Minus;
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const [justApplied, setJustApplied] = useState(false);
+
+  useEffect(() => {
+    if (!justApplied) return;
+    const timer = setTimeout(() => setJustApplied(false), 350);
+    return () => clearTimeout(timer);
+  }, [justApplied]);
+
+  const handleClick = () => {
+    onClick();
+    setJustApplied(true);
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      disabled={disabled}
+      onClick={handleClick}
+      aria-label={`${direction === "decrease" ? "Decrease" : "Increase"} ${label.toLowerCase()}`}
+      className={`h-auto flex-col gap-0.5 py-2.5 leading-tight transition-colors duration-300 ${
+        justApplied ? FLASH_CLASSES : ""
+      }`}
+    >
+      <Icon className="size-4" />
+      <span className="text-muted-foreground text-[10px] font-normal">{label}</span>
+    </Button>
   );
 }
 
@@ -441,13 +597,11 @@ function PresetButton({
       disabled={disabled}
       onClick={handleClick}
       className={`h-auto flex-col gap-0.5 py-3 leading-tight transition-colors duration-300 ${
-        justApplied ? "border-primary bg-primary/15 text-primary" : ""
+        justApplied ? FLASH_CLASSES : ""
       }`}
     >
       <span className="font-mono text-lg font-bold tabular-nums">{formatPresetValue(value)}</span>
-      <span className={`text-xs font-normal ${justApplied ? "text-primary" : "text-muted-foreground"}`}>
-        {unit}
-      </span>
+      <span className="text-muted-foreground text-xs font-normal">{unit}</span>
     </Button>
   );
 }
@@ -509,7 +663,7 @@ function PresetSettingsPopover({
       >
         <SlidersHorizontal className="size-3.5" />
       </PopoverTrigger>
-      <PopoverContent align="end">
+      <PopoverContent align="end" className="w-80">
         <PopoverHeader>
           <PopoverTitle>Preset settings</PopoverTitle>
           <PopoverDescription>Set what each quick-preset button dials in.</PopoverDescription>
@@ -520,16 +674,20 @@ function PresetSettingsPopover({
             <p className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
               Speed (mph)
             </p>
-            {speedPresets.map((value, index) => (
-              <PresetNumberField
-                key={index}
-                index={index}
-                value={value}
-                max={speedMax}
-                unit="mph"
-                onChange={(next) => setSpeedPreset(index, next)}
-              />
-            ))}
+            {/* Same 3×3 grid as the preset buttons themselves, so a field's
+                position here matches the button it edits one-to-one. */}
+            <div className="grid grid-cols-3 gap-2">
+              {speedPresets.map((value, index) => (
+                <PresetNumberField
+                  key={index}
+                  index={index}
+                  value={value}
+                  max={speedMax}
+                  unit="mph"
+                  onChange={(next) => setSpeedPreset(index, next)}
+                />
+              ))}
+            </div>
           </div>
 
           <Separator />
@@ -538,16 +696,19 @@ function PresetSettingsPopover({
             <p className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
               Incline (%)
             </p>
-            {inclinePresets.map((value, index) => (
-              <PresetNumberField
-                key={index}
-                index={index}
-                value={value}
-                max={inclineMax}
-                unit="%"
-                onChange={(next) => setInclinePreset(index, next)}
-              />
-            ))}
+            {/* Same 3×2 grid as the incline preset buttons. */}
+            <div className="grid grid-cols-3 gap-2">
+              {inclinePresets.map((value, index) => (
+                <PresetNumberField
+                  key={index}
+                  index={index}
+                  value={value}
+                  max={inclineMax}
+                  unit="%"
+                  onChange={(next) => setInclinePreset(index, next)}
+                />
+              ))}
+            </div>
           </div>
         </div>
 
@@ -566,7 +727,12 @@ function PresetSettingsPopover({
   );
 }
 
-/** One editable row: a preset's index, a single value field, and its unit. */
+/**
+ * One editable preset cell: an index badge, a single value field, and its
+ * unit — shaped like a compact `PresetButton` rather than a form row, so the
+ * grid of these lines up position-for-position with the actual preset
+ * buttons above (same `grid-cols-3`, same reading order).
+ */
 function PresetNumberField({
   index,
   value,
@@ -595,9 +761,9 @@ function PresetNumberField({
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="border-input relative flex flex-col items-center gap-0.5 rounded-lg border py-2">
       <span
-        className="text-muted-foreground w-4 shrink-0 text-right font-mono text-[11px]"
+        className="text-muted-foreground absolute top-1 left-1.5 font-mono text-[9px] leading-none"
         aria-hidden
       >
         {index + 1}
@@ -607,13 +773,13 @@ function PresetNumberField({
         type="text"
         inputMode="decimal"
         aria-label={`Preset ${index + 1}, ${unit}`}
-        className="h-7 flex-1 px-2 text-xs"
+        className="h-7 w-[4.5rem] px-1 text-center font-mono text-xs tabular-nums"
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={commit}
         onKeyDown={commitOnEnter}
       />
-      <span className="text-muted-foreground w-7 shrink-0 text-[10px]">{unit}</span>
+      <span className="text-muted-foreground text-[10px]">{unit}</span>
     </div>
   );
 }

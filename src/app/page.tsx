@@ -1,8 +1,8 @@
-import { Footprints } from "lucide-react";
-
 import { BrowserSupportNotice } from "@/components/browser-support-notice";
 import { HeartRateCard } from "@/components/heart-rate-card";
 import { HeartRateZonesPanel } from "@/components/heart-rate-zones-panel";
+import { TreadmillIcon } from "@/components/icons/treadmill-icon";
+import { IntervalWorkoutCard } from "@/components/interval-workout-card";
 import { LiveDashboard } from "@/components/live-dashboard";
 import { ModeSwitcher } from "@/components/mode-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -19,7 +19,7 @@ export default function Home() {
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <span className="bg-primary text-primary-foreground flex size-10 items-center justify-center rounded-xl">
-            <Footprints className="size-5" />
+            <TreadmillIcon className="size-5" />
           </span>
           <div>
             <h1 className="text-xl font-bold tracking-tight sm:text-2xl">TreadLogger</h1>
@@ -48,6 +48,7 @@ export default function Home() {
 
         <LiveDashboard />
         <WorkoutControls />
+        <IntervalWorkoutCard />
         <WorkoutSummary />
 
         <div className="grid gap-4 lg:grid-cols-2">

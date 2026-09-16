@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 
 import { Toaster } from "@/components/ui/sonner";
+import { IntervalWorkoutProvider } from "@/components/interval-workout-provider";
 import { WorkoutProvider } from "@/components/workout-provider";
 import "./globals.css";
 
@@ -36,9 +37,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // Matches the app's --primary green (src/app/globals.css). Colors the
-  // browser's toolbar/task-switcher chrome on Android; harmless elsewhere.
-  themeColor: "#178b3f",
+  // Matches the app's --primary green in dark mode (src/app/globals.css),
+  // since the app defaults to dark theme. Colors the browser's
+  // toolbar/task-switcher chrome on Android; harmless elsewhere.
+  themeColor: "#4adb72",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -50,7 +52,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="flex min-h-full flex-col">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-          <WorkoutProvider>{children}</WorkoutProvider>
+          <WorkoutProvider>
+            {/* Needs to sit inside WorkoutProvider: following a plan reads the
+             *  workout's own elapsed-time timer and, in automatic mode, calls
+             *  back into its setTargetSpeed/setTargetIncline. */}
+            <IntervalWorkoutProvider>{children}</IntervalWorkoutProvider>
+          </WorkoutProvider>
           <Toaster richColors position="top-center" />
         </ThemeProvider>
       </body>
