@@ -156,16 +156,40 @@ export function IntervalWorkoutCard() {
       builderWindowRef.current.focus();
       return;
     }
+    // The mockup's own CSS has two width-gated upgrades, both in
+    // `public/interval-builder-mockup.html`: past 560px it becomes a
+    // rounded, shadowed "floating card" with scrolling contained inside
+    // itself instead of the whole page scrolling under the browser's own
+    // bold default scrollbar; past 900px it stops being a stretched-out
+    // phone screenshot and switches to an actual desktop layout — the plan
+    // (templates + block list) and the composer side by side, wide enough
+    // for the composer's own Work/Rest fields to also go side by side
+    // rather than fully stacked (by far the tallest thing on this page).
+    // 1150×900 comfortably clears both, with room for the popup window's
+    // own chrome.
     const win = window.open(
       "/interval-builder-mockup.html",
       "treadlogger-interval-builder",
-      "width=480,height=860,resizable=yes,scrollbars=yes",
+      "width=1150,height=900,resizable=yes,scrollbars=yes",
     );
     if (!win) {
       toast.error("Couldn't open the workout builder", {
         description: "Your browser may have blocked the popup — check its address bar for a blocked-popup notice.",
       });
       return;
+    }
+    // Belt-and-braces: a window.open() call that reuses an *existing*
+    // same-named window (left open from a previous click, possibly at
+    // whatever size the user last dragged it to) ignores the size in the
+    // features string above in some browsers — only a brand-new window
+    // reliably picks it up. resizeTo() forces it either way; wrapped in
+    // try/catch since a handful of older/locked-down browsers restrict it
+    // even for script-opened windows, and this is a nicety, not something
+    // worth surfacing an error over if it's unavailable.
+    try {
+      win.resizeTo(1150, 900);
+    } catch {
+      // ignore — the popup still works at whatever size it already has
     }
     builderWindowRef.current = win;
   };

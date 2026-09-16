@@ -39,6 +39,26 @@
   }
   .mono{ font-family:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; font-variant-numeric:tabular-nums; }
 
+  /* Thin, theme-matched scrollbars in place of the browser's bold default —
+     mattered most in the desktop popup, where without the >=560px card
+     treatment below the whole page scrolls under a stock gray/white
+     scrollbar that clashes with the dark UI. `.chip-row` opts back out
+     (it hides its scrollbar entirely) via a more specific selector below,
+     so this doesn't need to special-case it. */
+  html, body, .scrollarea{
+    scrollbar-width:thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  html::-webkit-scrollbar, body::-webkit-scrollbar, .scrollarea::-webkit-scrollbar{ width:9px; height:9px; }
+  html::-webkit-scrollbar-track, body::-webkit-scrollbar-track, .scrollarea::-webkit-scrollbar-track{ background:transparent; }
+  html::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb, .scrollarea::-webkit-scrollbar-thumb{
+    background:var(--border-strong);
+    border-radius:8px;
+  }
+  html::-webkit-scrollbar-thumb:hover, body::-webkit-scrollbar-thumb:hover, .scrollarea::-webkit-scrollbar-thumb:hover{
+    background:var(--text-faint);
+  }
+
   .phone{
     width:100%;
     max-width:430px;
@@ -60,6 +80,66 @@
       overflow:hidden;
     }
     .scrollarea{ overflow-y:auto; }
+  }
+
+  /* Wraps the plan (summary/templates/plan-list) and the composer so a wide
+     desktop popup can lay them out side by side instead of stacked — see
+     the >=900px rule below. Mobile-first: plain column stacking by default,
+     which is exactly the original single-file order, so nothing changes at
+     phone widths.
+
+     This has to come BEFORE the >=900px media query below, not after it:
+     both declare `.builder-layout`'s `flex-direction` at equal (single-
+     class) specificity, and a media query doesn't add specificity of its
+     own — only *source order* breaks a specificity tie. Declared after the
+     media query (where this briefly lived, and where the bug actually
+     was), the plain always-column rule below unconditionally won the tie
+     at every width, silently overriding the media query's `row` and
+     leaving the plan/composer stacked no matter how wide the popup was —
+     found by comparing a screenshot at supposedly-900px+ against this
+     rule, since the composer's own Work/Rest grid (no competing
+     unconditional rule) *did* switch correctly, which is what gave away
+     that this was a cascade-order bug and not a width/sizing problem. */
+  .builder-layout{ display:flex; flex-direction:column; min-width:0; }
+  .builder-col{ min-width:0; }
+
+  /* A real desktop layout, not just a wider phone: past 900px there's room
+     for the plan (templates + block list) and the block composer side by
+     side, so a desktop window stops looking like a stretched-out phone
+     screenshot. `.phone`'s width cap only grows here — everything below
+     900px (including the >=560px "floating card" treatment right above)
+     is untouched, so phone and in-between-width behavior are unaffected. */
+  @media (min-width:900px){
+    .phone{ max-width:1080px; }
+    .builder-layout{ flex-direction:row; align-items:flex-start; gap:1.75rem; }
+    .builder-col-plan{ flex:1 1 400px; min-width:320px; }
+    .builder-col-composer{
+      /* Wide enough for Work/Rest to sit side by side (see the
+         #valueFields rule below) rather than just being a narrower copy of
+         the single-column composer — that side-by-side split is most of
+         what actually shortens the page for an interval block, which is
+         the tallest, most common thing to build here. */
+      flex:1 1 520px; min-width:420px; max-width:600px;
+      /* Stays in view while a long plan list scrolls past it on the left —
+         `.scrollarea` (its nearest scrolling ancestor) already has
+         `overflow-y:auto` by this width, from the 560px rule above. */
+      position:sticky; top:.5rem;
+    }
+    /* An interval block's composer is by far the tallest thing on this
+       page — Work and Rest each carry their own speed/incline/duration
+       controls, and stacking both fully is most of the "too tall, wasted
+       side space" complaint. `#valueFields:has(.subpanel + .subpanel)`
+       matches only that two-subpanel (interval) case — a single/warmup/
+       steady/cooldown composer has one unstyled wrapper div instead (see
+       `buildSubPanel(null, 'simple')` in the script), so this doesn't
+       affect it. Nested in this same breakpoint rather than a lower one of
+       its own, since it needs the wider composer column above to have
+       room for two legible columns — narrower than that and this would
+       just cram Work and Rest into two columns too thin to use. */
+    #valueFields:has(.subpanel + .subpanel){
+      display:grid; grid-template-columns:1fr 1fr; gap:0 1.25rem;
+    }
+    #valueFields:has(.subpanel + .subpanel) .subpanel + .subpanel{ margin-top:0; }
   }
 
   .top-bar-wrap{ position:sticky; top:env(safe-area-inset-top,0px); z-index:5; display:grid; }
@@ -311,38 +391,44 @@
   <div class="name-error" id="nameError" hidden>Give the workout a name first</div>
 
   <div class="scrollarea">
-    <section class="summary">
-      <div class="stat"><span class="stat-value mono" id="totalTime">0:00</span><span class="stat-label">Total time</span></div>
-      <div class="stat"><span class="stat-value mono" id="totalDist">0.00 mi</span><span class="stat-label">Est. distance</span></div>
-      <div class="stat"><span class="stat-value mono" id="segCount">0</span><span class="stat-label">Blocks</span></div>
-    </section>
+    <div class="builder-layout">
+      <div class="builder-col builder-col-plan">
+        <section class="summary">
+          <div class="stat"><span class="stat-value mono" id="totalTime">0:00</span><span class="stat-label">Total time</span></div>
+          <div class="stat"><span class="stat-value mono" id="totalDist">0.00 mi</span><span class="stat-label">Est. distance</span></div>
+          <div class="stat"><span class="stat-value mono" id="segCount">0</span><span class="stat-label">Blocks</span></div>
+        </section>
 
-    <div class="section-label">Start from a template</div>
-    <div class="chip-row" id="templateRow"></div>
+        <div class="section-label">Start from a template</div>
+        <div class="chip-row" id="templateRow"></div>
 
-    <div class="section-label">Your plan — tap any number to type an exact value</div>
-    <div class="plan-list" id="planList"></div>
+        <div class="section-label">Your plan — tap any number to type an exact value</div>
+        <div class="plan-list" id="planList"></div>
+      </div>
 
-    <div class="composer">
-      <div class="section-label">Build a segment</div>
-      <div class="composer-inner">
+      <div class="builder-col builder-col-composer">
+        <div class="composer">
+          <div class="section-label">Build a segment</div>
+          <div class="composer-inner">
 
-        <div class="field">
-          <div class="field-label">Type</div>
-          <div class="pill-row" id="typeRow"></div>
-        </div>
+            <div class="field">
+              <div class="field-label">Type</div>
+              <div class="pill-row" id="typeRow"></div>
+            </div>
 
-        <div class="field" id="valueFields"></div>
+            <div class="field" id="valueFields"></div>
 
-        <div class="field">
-          <div class="field-label" id="repLabel">Repeat this segment</div>
-          <div class="stepper">
-            <button class="step-btn" id="repMinus" type="button">−</button>
-            <span class="stepper-readout mono" id="repReadout">×1</span>
-            <button class="step-btn" id="repPlus" type="button">+</button>
+            <div class="field">
+              <div class="field-label" id="repLabel">Repeat this segment</div>
+              <div class="stepper">
+                <button class="step-btn" id="repMinus" type="button">−</button>
+                <span class="stepper-readout mono" id="repReadout">×1</span>
+                <button class="step-btn" id="repPlus" type="button">+</button>
+              </div>
+            </div>
+
           </div>
         </div>
-
       </div>
     </div>
   </div>
@@ -395,7 +481,7 @@
   var TEMPLATES = [
     { name:'5×1 / 2 easy', blocks:[
       single('warmup',6.5,0,300),
-      group(6,[['work',8,0,60],['rest',6,0,120]]),
+      group(5,[['work',8,0,60],['rest',6,0,120]]),
       single('cooldown',5.5,0,300)
     ]},
     { name:'Pyramid', blocks:[
@@ -868,6 +954,46 @@
     if(e.target.classList && e.target.classList.contains('val-input') && e.key === 'Enter'){
       e.preventDefault();
       e.target.blur();
+    }
+  });
+
+  // Every editable text box on this page (a plan-list value like "6.5" or
+  // "5:00", a composer stepper field, the workout name) is meant to be
+  // overwritten in one go — click in, type the new value, done — not
+  // edited character by character. Selecting the existing text on focus is
+  // what makes that the natural thing to do; without it, typing over a
+  // value means backspacing or dragging to select it by hand first.
+  // Delegated on `document` (using `focusin`, since plain `focus` doesn't
+  // bubble) instead of wired into each input's own creation code, so it
+  // covers `.val-input` and `.composer-input` fields alike even though
+  // they're built by two separate functions, and keeps working for any
+  // input added later without needing to remember to wire this up again.
+  function isSelectOnFocusInput(t){
+    return t.tagName === 'INPUT' && (
+      t.classList.contains('val-input') ||
+      t.classList.contains('composer-input') ||
+      t.id === 'nameInput'
+    );
+  }
+  // Belt-and-braces for a click-triggered focus specifically: `select()`
+  // below already runs before the same click's `mouseup`, but in some
+  // browsers that mouseup then goes on to collapse the selection back down
+  // to a plain cursor position anyway (its default behavior of placing the
+  // caret under the pointer). Marking the input right after selecting it,
+  // then swallowing exactly the next mouseup on that same input, is the
+  // standard workaround — later clicks (to place the cursor somewhere
+  // specific instead of overwriting everything) are unaffected, since the
+  // mark is consumed the first time.
+  document.addEventListener('focusin', function(e){
+    if(!isSelectOnFocusInput(e.target)) return;
+    e.target.select();
+    e.target.dataset.selectOnFocusPending = '1';
+  });
+  document.addEventListener('mouseup', function(e){
+    var t = e.target;
+    if(t.dataset && t.dataset.selectOnFocusPending === '1'){
+      delete t.dataset.selectOnFocusPending;
+      e.preventDefault();
     }
   });
 

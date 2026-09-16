@@ -28,7 +28,7 @@ export const WORKOUT_TEMPLATES: WorkoutTemplate[] = [
     name: "5×1 / 2 easy",
     blocks: [
       single("warmup", 6.5, 0, 300),
-      interval(6, { speedMph: 8, inclinePercent: 0, durationSec: 60 }, { speedMph: 6, inclinePercent: 0, durationSec: 120 }),
+      interval(5, { speedMph: 8, inclinePercent: 0, durationSec: 60 }, { speedMph: 6, inclinePercent: 0, durationSec: 120 }),
       single("cooldown", 5.5, 0, 300),
     ],
   },
