@@ -303,7 +303,19 @@
     transition:opacity .15s;
   }
   .add-bar{ background:linear-gradient(to top, var(--bg) 60%, transparent); opacity:1; }
-  .phone.dragging .add-bar{ opacity:0; pointer-events:none; }
+  /* Only fades the add button out from *this* spot while a card's being
+     dragged (so it doesn't fight the trash-zone occupying the same grid
+     cell right underneath it). Scoped to `#bottomBar .add-bar` rather than
+     the plain `.add-bar` class, since `placeAddBar()` (see the script)
+     moves this same element into `#composerAddSlot` on desktop, where it's
+     nowhere near the trash-zone and has no reason to hide during a drag. */
+  .phone.dragging #bottomBar .add-bar{ opacity:0; pointer-events:none; }
+  /* Once relocated into the composer, it's an in-flow submit button at the
+     bottom of an already-bordered card, not a floating bar over scrolling
+     content — the gradient/padding meant for that floating context would
+     just look like an odd dark stripe inside the card. */
+  #composerAddSlot:not(:empty){ margin-top:1rem; }
+  #composerAddSlot .add-bar{ background:none; padding:0; }
 
   .trash-zone{
     display:flex; align-items:center; justify-content:center; gap:.5rem;
@@ -427,14 +439,25 @@
               </div>
             </div>
 
+            <!-- Empty on mobile — "Add to plan" lives in the sticky
+                 #bottomBar there instead. On the >=900px desktop layout,
+                 placeAddBar() (near the end of the script) moves the actual
+                 #addBar node in here, so the button reads as this segment's
+                 own submit action instead of a page-wide bar with a lot of
+                 unrelated dead space below it. See that function for why
+                 this has to be a JS move rather than a CSS-only rule: it's
+                 the same interactive button and its one click handler
+                 either way, just relocated, not duplicated. -->
+            <div id="composerAddSlot"></div>
+
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="bottom-bar">
-    <div class="add-bar">
+  <div class="bottom-bar" id="bottomBar">
+    <div class="add-bar" id="addBar">
       <button class="add-btn" id="addBtn" type="button">
         <span class="add-dot"></span> Add to plan
       </button>
@@ -1275,6 +1298,29 @@
     if(e.target.value.trim()) document.getElementById('nameError').hidden = true;
   });
   document.getElementById('nameInput').value = TEMPLATES[state.activeTemplate].name;
+
+  // On the >=900px desktop layout, "Add to plan" belongs under the
+  // composer it submits, not stuck in a page-wide bar with the plan list's
+  // own unrelated column sitting next to a lot of dead space below it. On
+  // mobile it belongs in the thumb-reachable sticky bar at the bottom of
+  // the screen, same as always. Rather than two buttons (duplicate IDs,
+  // two click handlers to keep in sync) this physically moves the one
+  // `#addBar` element between its two homes — cheap and correct, since the
+  // element (and its one click handler, wired below on `#addBtn`) carries
+  // over untouched either way. Re-runs on every breakpoint crossing, not
+  // just at load, since the popup is a resizable window.
+  var desktopLayoutQuery = window.matchMedia('(min-width:900px)');
+  function placeAddBar(){
+    var addBar = document.getElementById('addBar');
+    var target = desktopLayoutQuery.matches
+      ? document.getElementById('composerAddSlot')
+      : document.getElementById('bottomBar');
+    if(addBar.parentNode === target) return;
+    if(target.id === 'bottomBar') target.insertBefore(addBar, target.firstChild);
+    else target.appendChild(addBar);
+  }
+  placeAddBar();
+  desktopLayoutQuery.addEventListener('change', placeAddBar);
 
   renderTemplates();
   renderTypeRow();
