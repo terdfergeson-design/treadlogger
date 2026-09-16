@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Download, FolderOpen, ListPlus, Pause, Play, X } from "lucide-react";
+import { toast } from "sonner";
 
-import { IntervalBuilder } from "@/components/interval-builder";
 import { IntervalWorkoutChart } from "@/components/interval-workout-chart";
 import { MIN_BELT_SPEED_MPH, useIntervalWorkout } from "@/components/interval-workout-provider";
 import { useWorkout } from "@/components/workout-provider";
@@ -11,6 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toMachineSpeed } from "@/lib/ble/ftms/speed-units";
 import { formatDuration } from "@/lib/format";
+import { IntervalWorkoutFileError, parseIntervalWorkoutFile } from "@/lib/intervals/serialize";
+
+/** Marks a `postMessage` as coming from the interval builder popup rather
+ *  than from anything else that might message this window — checked
+ *  alongside the message's `event.source`/`event.origin`, not instead of
+ *  them (see the listener in `IntervalWorkoutCard` below). */
+const BUILDER_MESSAGE_SOURCE = "treadlogger-interval-mockup";
 
 /**
  * Full-width card for planning and following a structured interval workout —
@@ -43,6 +50,22 @@ import { formatDuration } from "@/lib/format";
  * don't want to do, or backing up to redo one. Dragging only changes where
  * the *next* resume picks up from; it doesn't move the treadmill or the
  * workout's clock by itself.
+ *
+ * "Create workout" opens `/interval-builder-mockup.html` (a static page in
+ * `public/`, not a React component) in a sized popup window, rather than
+ * rendering an in-app builder. That file *is* the original standalone
+ * interaction-design mockup — full pointer-driven drag-to-reorder, drag-to-
+ * delete, drag-to-duplicate, the works — kept alive as plain HTML/JS instead
+ * of re-implemented in React a second time, after the from-scratch React
+ * port (`interval-builder.tsx`, still in the repo but no longer used here)
+ * turned out to have quietly dropped enough of that interaction fidelity
+ * that it was worth going back to the source rather than continuing to
+ * patch the port. The popup posts the finished plan back to this window
+ * with `postMessage` when its own Save button is clicked (or downloads a
+ * `.treadlogger.json` instead, if it isn't a popup this window opened — see
+ * the mockup file's own comments) — `handleBuilderMessage` below is the
+ * receiving end, validated through the same `parseIntervalWorkoutFile` a
+ * loaded file goes through, not trusted as-is.
  */
 export function IntervalWorkoutCard() {
   const { workout, treadmill } = useWorkout();
@@ -68,8 +91,12 @@ export function IntervalWorkoutCard() {
     elapsedInPlanSec,
   } = useIntervalWorkout();
 
-  const [builderOpen, setBuilderOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // The popup window opened for "Create workout", so a second click can
+  // just refocus it instead of opening a duplicate, and so the message
+  // listener below can check `event.source` against something more
+  // specific than "any window that happens to message us".
+  const builderWindowRef = useRef<Window | null>(null);
 
   const workoutRunning = workout.state === "active" || workout.state === "paused";
   const beltSpeedMph =
@@ -83,25 +110,65 @@ export function IntervalWorkoutCard() {
     if (file) void loadPlanFile(file);
   };
 
-  if (builderOpen) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Build an interval workout</CardTitle>
-          <CardDescription>Add blocks one at a time, or start from a template below.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <IntervalBuilder
-            onSave={(workoutFile) => {
-              setPlan(workoutFile);
-              setBuilderOpen(false);
-            }}
-            onCancel={() => setBuilderOpen(false)}
-          />
-        </CardContent>
-      </Card>
+  // Receives the finished plan (or a cancel) from the builder popup. Two
+  // checks beyond the message's own declared `source` field: `event.origin`
+  // must be this same site (the popup is same-origin, served from our own
+  // `public/`, so anything else is not it), and `event.source` must be
+  // *this specific* popup window, not just any window — a page can only
+  // ever message windows it has a reference to, so this also naturally
+  // ignores messages after the ref's been reused for a newer popup.
+  useEffect(() => {
+    function handleBuilderMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      if (!builderWindowRef.current || event.source !== builderWindowRef.current) return;
+
+      const data = event.data as { source?: unknown; type?: unknown; workout?: unknown } | null;
+      if (!data || data.source !== BUILDER_MESSAGE_SOURCE) return;
+
+      if (data.type === "save") {
+        try {
+          // The popup builds a plausible-looking object, but it's still a
+          // separate, hand-rolled bit of JS reaching in through
+          // `postMessage` — parsed and validated the same way a loaded
+          // `.treadlogger.json` file is, not trusted as already-correct.
+          const parsed = parseIntervalWorkoutFile(JSON.stringify(data.workout));
+          setPlan(parsed);
+          toast.success("Interval workout saved", { description: parsed.name });
+        } catch (error) {
+          toast.error("Could not use that workout", {
+            description:
+              error instanceof IntervalWorkoutFileError || error instanceof Error
+                ? error.message
+                : String(error),
+          });
+        }
+      }
+      // Either a save or a cancel means the popup is closing itself.
+      builderWindowRef.current = null;
+    }
+
+    window.addEventListener("message", handleBuilderMessage);
+    return () => window.removeEventListener("message", handleBuilderMessage);
+  }, [setPlan]);
+
+  const openBuilder = () => {
+    if (builderWindowRef.current && !builderWindowRef.current.closed) {
+      builderWindowRef.current.focus();
+      return;
+    }
+    const win = window.open(
+      "/interval-builder-mockup.html",
+      "treadlogger-interval-builder",
+      "width=480,height=860,resizable=yes,scrollbars=yes",
     );
-  }
+    if (!win) {
+      toast.error("Couldn't open the workout builder", {
+        description: "Your browser may have blocked the popup — check its address bar for a blocked-popup notice.",
+      });
+      return;
+    }
+    builderWindowRef.current = win;
+  };
 
   // What "waiting on the belt" reads as wherever it shows up — before the
   // first start, and again during the freeze after a resume.
@@ -151,7 +218,7 @@ export function IntervalWorkoutCard() {
             onChange={handleFileChosen}
           />
 
-          <Button type="button" variant="outline" onClick={() => setBuilderOpen(true)}>
+          <Button type="button" variant="outline" onClick={openBuilder}>
             <ListPlus className="size-4" />
             Create workout
           </Button>

@@ -1,0 +1,1163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TreadLogger Intervals</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  :root{
+    --page-bg:#0a0d0b;
+    --bg:#10140f;
+    --surface:#171d19;
+    --surface-2:#1e2521;
+    --surface-3:#252d27;
+    --border: rgba(255,255,255,.08);
+    --border-strong: rgba(255,255,255,.14);
+    --text:#edf3ee;
+    --text-dim:#9fb0a5;
+    --text-faint:#647169;
+
+    --c-warmup:#f2a93c;
+    --c-work:#3ddc84;
+    --c-steady:#57c7bd;
+    --c-rest:#8492a0;
+    --c-cooldown:#4fb3e8;
+
+    --type-accent: var(--c-work);
+    font-size:16px;
+  }
+
+  *{ box-sizing:border-box; }
+  body{
+    background:var(--page-bg);
+    color:var(--text);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    display:flex;
+    justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{ font-family:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; font-variant-numeric:tabular-nums; }
+
+  .phone{
+    width:100%;
+    max-width:430px;
+    background:
+      radial-gradient(120% 60% at 50% -10%, rgba(61,220,132,.07), transparent 60%),
+      var(--bg);
+    min-height:100dvh;
+    display:flex;
+    flex-direction:column;
+  }
+
+  @media (min-width:560px){
+    body{ padding-block:2.5rem; }
+    .phone{
+      min-height:auto;
+      max-height:calc(100dvh - 5rem);
+      border-radius:30px;
+      box-shadow: 0 40px 90px rgba(0,0,0,.55), 0 0 0 1px var(--border-strong);
+      overflow:hidden;
+    }
+    .scrollarea{ overflow-y:auto; }
+  }
+
+  .top-bar-wrap{ position:sticky; top:env(safe-area-inset-top,0px); z-index:5; display:grid; }
+  .top-bar-wrap > *{ grid-area:1/1; transition:opacity .15s; }
+  .phone.dragging .topbar{ opacity:0; pointer-events:none; }
+
+  .topbar{
+    display:flex; align-items:center; gap:.75rem;
+    padding:.9rem 1.1rem;
+    background:rgba(16,20,15,.9);
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--border);
+    opacity:1;
+  }
+
+  .copy-zone{
+    display:flex; align-items:center; justify-content:center; gap:.5rem;
+    padding:.9rem 1.1rem;
+    background:color-mix(in srgb, var(--c-work) 16%, var(--bg));
+    border-bottom:1px dashed color-mix(in srgb, var(--c-work) 45%, transparent);
+    color:var(--c-work); font-weight:600; font-size:.82rem;
+    opacity:0; pointer-events:none;
+  }
+  .phone.dragging .copy-zone{ opacity:1; }
+  .copy-zone.armed{ background:color-mix(in srgb, var(--c-work) 34%, var(--bg)); color:#fff; }
+  .copy-zone svg{ width:1.1rem; height:1.1rem; flex:0 0 auto; }
+  .iconbtn{
+    appearance:none; border:none; background:transparent; color:var(--text-dim);
+    font-family:inherit; font-size:1.15rem; line-height:1; padding:.25rem;
+    cursor:pointer;
+  }
+  .iconbtn.save{
+    margin-left:auto; font-size:.85rem; font-weight:600; color:var(--c-work);
+    letter-spacing:.02em;
+  }
+  .title{
+    font-weight:600; font-size:.95rem; color:inherit; font-family:inherit;
+    background:transparent; border:none; outline:none; padding:0;
+    flex:1; min-width:0;
+  }
+  .title::placeholder{ color:var(--text-faint); font-weight:500; }
+  .name-error{ padding:.5rem 1.1rem 0; font-size:.75rem; color:#ff9a9d; background:var(--bg); }
+  [hidden]{ display:none !important; }
+
+  .scrollarea{ flex:1; padding-bottom:1rem; }
+
+  .summary{
+    display:grid; grid-template-columns:repeat(3,1fr);
+    gap:1px; background:var(--border);
+    margin:1rem 1.1rem 0; border-radius:14px; overflow:hidden;
+    border:1px solid var(--border);
+  }
+  .stat{ background:var(--surface); padding:.7rem .5rem; text-align:center; }
+  .stat-value{ display:block; font-size:1.15rem; font-weight:600; }
+  .stat-label{ display:block; margin-top:.15rem; font-size:.65rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; }
+
+  .section-label{
+    font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint);
+    font-weight:600; margin:1.35rem 1.1rem .55rem;
+  }
+
+  .chip-row{ display:flex; gap:.5rem; overflow-x:auto; padding:0 1.1rem 2px; scrollbar-width:none; }
+  .chip-row::-webkit-scrollbar{ display:none; }
+  .tpl-chip{
+    appearance:none; white-space:nowrap; flex:0 0 auto;
+    background:var(--surface); color:var(--text-dim);
+    border:1px solid var(--border); border-radius:999px;
+    padding:.45rem .9rem; font-size:.8rem; font-family:inherit; font-weight:500;
+    cursor:pointer; transition:background .15s,border-color .15s,color .15s;
+  }
+  .tpl-chip.active{ background:color-mix(in srgb, var(--c-work) 18%, var(--surface)); border-color:var(--c-work); color:var(--text); }
+
+  .plan-list{ padding:0 1.1rem; display:flex; flex-direction:column; gap:.55rem; }
+
+  .block-card{
+    background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--type-color, var(--text-faint));
+    border-radius:10px; padding:.6rem .7rem;
+  }
+  .badge{
+    font-size:.62rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--type-color); background:color-mix(in srgb, var(--type-color) 16%, var(--surface));
+    border-radius:5px; padding:.22rem .4rem; flex:0 0 auto;
+  }
+  .drag-handle{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    width:1.4rem; height:1.6rem; margin:-.2rem 0; color:var(--text-faint);
+    cursor:grab; touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .drag-handle:hover{ color:var(--text-dim); }
+  .drag-handle svg{ pointer-events:none; }
+  .card-row1{ display:flex; align-items:center; gap:.6rem; }
+  .card-row2{
+    display:flex; align-items:center; justify-content:center; gap:.7rem; margin-top:.45rem; padding-top:.4rem;
+    border-top:1px dashed var(--border);
+  }
+  .value-field{ display:flex; align-items:baseline; gap:.15rem; }
+  .val-input{
+    appearance:none; border:none; background:transparent; color:var(--text);
+    font:inherit; text-align:right; padding:.1rem .15rem; border-radius:5px; min-width:0;
+  }
+  .val-input:focus{ outline:none; background:var(--surface-3); box-shadow:0 0 0 1px var(--type-color, var(--border-strong)); }
+  .val-input.speed-input, .val-input.incline-input{ width:3.8ch; font-size:.85rem; padding:.1rem .1rem; }
+  .val-input.dur-input{ width:5.2ch; font-size:.9rem; font-weight:600; text-align:left; }
+  .val-input.reps-input{ width:2ch; font-size:.8rem; text-align:left; }
+  .unit-suffix{ font-size:.72rem; color:var(--text-faint); flex:0 0 auto; }
+  .reps-field{ display:flex; align-items:baseline; gap:.1rem; color:var(--text-dim); font-size:.8rem; font-weight:600; flex:0 0 auto; }
+
+  /* Every block — single or grouped — carries this exact control cluster in the
+     same top-right slot: reorder up/down, then delete, always in that order. */
+  .ctrl-cluster{ display:flex; align-items:center; gap:.05rem; margin-left:auto; flex:0 0 auto; }
+  .ctrl-btn{
+    appearance:none; border:none; background:transparent; color:var(--text-faint);
+    font-family:inherit; font-size:.75rem; padding:.2rem .3rem; cursor:pointer; line-height:1;
+  }
+  .ctrl-btn:hover{ color:var(--text); }
+  .ctrl-btn svg{ width:.8rem; height:.8rem; display:block; }
+  .ctrl-btn.delete{ margin-left:.25rem; padding-left:.35rem; border-left:1px solid var(--border); }
+
+  .group-card{
+    background:var(--surface-2); border:1px solid var(--border); border-left:3px solid var(--c-work);
+    border-radius:10px; padding:.6rem .7rem .5rem;
+  }
+  .group-head{ display:flex; align-items:center; gap:.4rem; margin-bottom:.5rem; }
+  .group-title{ font-size:.72rem; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.05em; }
+  .group-reps-field{
+    display:flex; align-items:baseline; gap:.05rem; font-size:.75rem; font-weight:700; color:var(--c-work);
+    background:color-mix(in srgb, var(--c-work) 16%, var(--surface-2)); border-radius:999px; padding:.1rem .3rem .1rem .55rem;
+  }
+  .group-reps-field .val-input{ color:var(--c-work); width:1.4ch; }
+  .group-seg{ display:flex; align-items:center; gap:.5rem; padding:.32rem 0; }
+  .group-seg + .group-seg{ border-top:1px dashed var(--border); }
+  .dot{ width:.5rem; height:.5rem; border-radius:50%; background:var(--type-color); flex:0 0 auto; }
+  .group-seg .seg-label{ flex:1; font-size:.8rem; color:var(--text-dim); }
+  .group-seg .val-input{ font-size:.82rem; }
+
+  .just-added{ animation: flashin .7s ease-out; }
+  @keyframes flashin{
+    0%{ background:color-mix(in srgb, var(--type-color, var(--c-work)) 35%, var(--surface)); }
+    100%{ background:var(--surface); }
+  }
+
+  .drag-placeholder{
+    border:2px dashed var(--border-strong); border-radius:10px;
+    background:color-mix(in srgb, var(--text) 4%, transparent);
+  }
+  .block-card.dragging, .group-card.dragging{
+    position:fixed; z-index:60; box-shadow:0 18px 34px rgba(0,0,0,.5);
+    transform:scale(1.03); cursor:grabbing; pointer-events:none;
+  }
+  .block-card.dragging.over-trash, .group-card.dragging.over-trash{
+    box-shadow:0 0 0 2px #ff5a5f, 0 18px 34px rgba(0,0,0,.5);
+  }
+  .block-card.dragging.over-copy, .group-card.dragging.over-copy{
+    box-shadow:0 0 0 2px var(--c-work), 0 18px 34px rgba(0,0,0,.5);
+  }
+  html.dragging-active, html.dragging-active body{ overscroll-behavior:none; touch-action:none; }
+
+  .bottom-bar{ position:sticky; bottom:0; z-index:5; display:grid; }
+  .bottom-bar > *{
+    grid-area:1/1; padding:.85rem 1.1rem calc(.85rem + env(safe-area-inset-bottom,0px));
+    transition:opacity .15s;
+  }
+  .add-bar{ background:linear-gradient(to top, var(--bg) 60%, transparent); opacity:1; }
+  .phone.dragging .add-bar{ opacity:0; pointer-events:none; }
+
+  .trash-zone{
+    display:flex; align-items:center; justify-content:center; gap:.5rem;
+    background:color-mix(in srgb, #ff5a5f 14%, var(--bg));
+    border-top:1px dashed rgba(255,90,95,.45);
+    color:#ff9a9d; font-weight:600; font-size:.82rem;
+    opacity:0; pointer-events:none;
+  }
+  .phone.dragging .trash-zone{ opacity:1; }
+  .trash-zone.armed{ background:color-mix(in srgb, #ff5a5f 32%, var(--bg)); color:#fff; }
+  .trash-zone svg{ width:1.1rem; height:1.1rem; flex:0 0 auto; }
+
+  .composer{ margin-top:.4rem; padding-bottom:.3rem; }
+  .composer-inner{
+    margin:0 1.1rem; background:var(--surface); border:1px solid var(--border);
+    border-top:2px solid var(--type-accent); border-radius:14px; padding:1rem; transition:border-color .2s;
+  }
+  .field + .field{ margin-top:.9rem; }
+  .field-label{ font-size:.72rem; font-weight:600; color:var(--text-dim); margin-bottom:.45rem; }
+  .field-label .unit{ color:var(--text-faint); font-weight:500; }
+
+  .pill-row{ display:flex; flex-wrap:wrap; gap:.4rem; }
+  .pill{
+    appearance:none; background:var(--surface-2); color:var(--text-dim); border:1px solid var(--border);
+    border-radius:999px; padding:.4rem .75rem; font-size:.78rem; font-weight:500; font-family:inherit;
+    cursor:pointer; transition:background .15s,border-color .15s,color .15s;
+  }
+  .pill.active{ background:color-mix(in srgb, var(--type-accent) 22%, var(--surface-2)); border-color:var(--type-accent); color:var(--text); }
+  #typeRow .pill[data-type="warmup"].active{ --type-accent:var(--c-warmup); }
+
+  .stepper{ display:flex; align-items:center; gap:.7rem; margin-top:.55rem; }
+  .composer-input{
+    appearance:none; border:1px solid var(--border); background:var(--surface-2); color:var(--text);
+    font:inherit; font-size:1rem; font-weight:700; text-align:center; border-radius:9px;
+    padding:.5rem .3rem; width:4.6ch; min-width:0;
+  }
+  .composer-input.dur{ width:6ch; }
+  .composer-input:focus{ outline:none; border-color:var(--type-accent); background:var(--surface-3); }
+
+  .subpanel{ border-left:3px solid var(--subpanel-color, var(--border)); padding-left:.85rem; }
+  .subpanel + .subpanel{ margin-top:1.2rem; }
+  .subpanel-title{
+    font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--subpanel-color, var(--text-dim)); margin-bottom:.7rem;
+  }
+  .step-btn{
+    appearance:none; width:2.1rem; height:2.1rem; border-radius:50%; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--text); font-family:inherit; font-size:.85rem; font-weight:600;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .step-btn:hover{ border-color:var(--type-accent); }
+  .stepper-readout{ min-width:3.4rem; text-align:center; font-size:.95rem; font-weight:600; }
+
+  .add-btn{
+    width:100%; appearance:none; border:none; border-radius:12px; cursor:pointer;
+    background:var(--type-accent); color:#06170d; font-family:inherit; font-weight:700; font-size:.92rem;
+    padding:.85rem; display:flex; align-items:center; justify-content:center; gap:.5rem;
+    transition:background .2s;
+  }
+  .add-dot{ width:.55rem; height:.55rem; border-radius:50%; background:#06170d; opacity:.55; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:.001ms !important; transition-duration:.001ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="phone" id="phoneRoot">
+  <div class="top-bar-wrap">
+    <header class="topbar">
+      <button class="iconbtn" id="backBtn" type="button" aria-label="Back">‹</button>
+      <input class="title" id="nameInput" type="text" placeholder="Workout name" aria-label="Workout name" autocomplete="off">
+      <button class="iconbtn save" id="saveBtn" type="button">Save</button>
+    </header>
+    <div class="copy-zone" id="copyZone">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="11" height="11" rx="2"/>
+        <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>
+      </svg>
+      Drop here to copy
+    </div>
+  </div>
+
+  <div class="name-error" id="nameError" hidden>Give the workout a name first</div>
+
+  <div class="scrollarea">
+    <section class="summary">
+      <div class="stat"><span class="stat-value mono" id="totalTime">0:00</span><span class="stat-label">Total time</span></div>
+      <div class="stat"><span class="stat-value mono" id="totalDist">0.00 mi</span><span class="stat-label">Est. distance</span></div>
+      <div class="stat"><span class="stat-value mono" id="segCount">0</span><span class="stat-label">Blocks</span></div>
+    </section>
+
+    <div class="section-label">Start from a template</div>
+    <div class="chip-row" id="templateRow"></div>
+
+    <div class="section-label">Your plan — tap any number to type an exact value</div>
+    <div class="plan-list" id="planList"></div>
+
+    <div class="composer">
+      <div class="section-label">Build a segment</div>
+      <div class="composer-inner">
+
+        <div class="field">
+          <div class="field-label">Type</div>
+          <div class="pill-row" id="typeRow"></div>
+        </div>
+
+        <div class="field" id="valueFields"></div>
+
+        <div class="field">
+          <div class="field-label" id="repLabel">Repeat this segment</div>
+          <div class="stepper">
+            <button class="step-btn" id="repMinus" type="button">−</button>
+            <span class="stepper-readout mono" id="repReadout">×1</span>
+            <button class="step-btn" id="repPlus" type="button">+</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="add-bar">
+      <button class="add-btn" id="addBtn" type="button">
+        <span class="add-dot"></span> Add to plan
+      </button>
+    </div>
+    <div class="trash-zone" id="trashZone">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 7h16"/><path d="M9 7V4h6v3"/>
+        <path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/>
+        <path d="M10 11v6"/><path d="M14 11v6"/>
+      </svg>
+      Drop here to delete
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var TYPE_META = {
+    warmup:  { label:'Warmup',  color:'var(--c-warmup)' },
+    work:    { label:'Work',    color:'var(--c-work)' },
+    steady:  { label:'Steady',  color:'var(--c-steady)' },
+    rest:    { label:'Rest',    color:'var(--c-rest)' },
+    cooldown:{ label:'Cooldown',color:'var(--c-cooldown)' }
+  };
+  var DURATION_PILLS = [30,60,120,180,300,600];
+
+  var uidCounter = 1;
+  function uid(){ return 'b' + (uidCounter++); }
+  function single(type, speed, incline, duration, reps){
+    return { kind:'single', id:uid(), type:type, speed:speed, incline:incline, duration:duration, reps:reps||1 };
+  }
+  function group(reps, segs){
+    return { kind:'group', id:uid(), reps:reps, segs: segs.map(function(s){
+      return { type:s[0], speed:s[1], incline:s[2], duration:s[3] };
+    }) };
+  }
+  function cloneBlocks(list){
+    return list.map(function(b){
+      if(b.kind==='single') return single(b.type,b.speed,b.incline,b.duration,b.reps);
+      return group(b.reps, b.segs.map(function(s){ return [s.type,s.speed,s.incline,s.duration]; }));
+    });
+  }
+
+  var TEMPLATES = [
+    { name:'5×1 / 2 easy', blocks:[
+      single('warmup',6.5,0,300),
+      group(6,[['work',8,0,60],['rest',6,0,120]]),
+      single('cooldown',5.5,0,300)
+    ]},
+    { name:'Pyramid', blocks:[
+      single('warmup',6.0,0,300),
+      single('steady',6.5,0,240),
+      single('steady',7.0,0,180),
+      single('steady',7.5,0,120),
+      single('steady',8.0,0,60),
+      single('steady',7.5,0,120),
+      single('steady',7.0,0,180),
+      single('steady',6.5,0,240),
+      single('cooldown',6.0,0,300)
+    ]},
+    { name:'Easy 30', blocks:[
+      single('warmup',5.5,0,180),
+      single('steady',6.5,0,1500),
+      single('cooldown',5.5,0,120)
+    ]},
+    { name:'Hill repeats', blocks:[
+      single('warmup',5.5,1,300),
+      group(5,[['work',6.5,8,90],['rest',6.0,0,90]]),
+      single('cooldown',5.5,0,300)
+    ]}
+  ];
+
+  var COMPOSER_TYPE_META = {
+    warmup:   TYPE_META.warmup,
+    interval: { label:'Interval', color:'var(--c-work)' },
+    steady:   TYPE_META.steady,
+    cooldown: TYPE_META.cooldown
+  };
+
+  var state = {
+    blocks: cloneBlocks(TEMPLATES[0].blocks),
+    activeTemplate: 0,
+    composer: {
+      type: 'interval',
+      reps: 1,
+      simple: { speed:3.0, incline:0, durationSec:300 },
+      work:   { speed:6.5, incline:1, durationSec:60 },
+      rest:   { speed:3.5, incline:0, durationSec:120 }
+    },
+    lastAddedId: null
+  };
+
+  function pad(n){ return n<10 ? '0'+n : ''+n; }
+  function formatDuration(sec){
+    sec = Math.round(sec);
+    if(sec < 3600){
+      var m = Math.floor(sec/60), s = sec%60;
+      return m + ':' + pad(s);
+    }
+    var h = Math.floor(sec/3600), m2 = Math.floor((sec%3600)/60), s2 = sec%60;
+    return h + ':' + pad(m2) + ':' + pad(s2);
+  }
+  function fmtSpeed(v){ return (Math.round(v*10)/10).toFixed(1); }
+  function fmtIncline(v){
+    var r = Math.round(v*10)/10;
+    return (r % 1 === 0) ? String(r) : r.toFixed(1);
+  }
+  function clamp(v, min, max){ return Math.min(max, Math.max(min, v)); }
+  function parseSpeedInput(str, fallback){
+    var v = parseFloat(String(str).replace(',', '.'));
+    if(isNaN(v)) return fallback;
+    return clamp(Math.round(v*10)/10, 0.5, 12);
+  }
+  function parseInclineInput(str, fallback){
+    var v = parseFloat(String(str).replace(',', '.'));
+    if(isNaN(v)) return fallback;
+    return clamp(Math.round(v*10)/10, 0, 20);
+  }
+  function parseDurationInput(str, fallback){
+    str = String(str).trim();
+    if(str.indexOf(':') !== -1){
+      var parts = str.split(':');
+      var m = parseInt(parts[0], 10) || 0;
+      var s = parseInt(parts[1], 10) || 0;
+      return clamp(m*60 + s, 15, 7200);
+    }
+    var n = parseFloat(str);
+    if(isNaN(n)) return fallback;
+    return clamp(Math.round(n*60), 15, 7200);
+  }
+  function parseRepsInput(str, fallback){
+    var v = parseInt(str, 10);
+    if(isNaN(v)) return fallback;
+    return clamp(v, 1, 20);
+  }
+
+  function computeTotals(blocks){
+    var sec = 0, mi = 0;
+    blocks.forEach(function(b){
+      if(b.kind==='single'){
+        sec += b.duration * b.reps;
+        mi += (b.speed * b.duration / 3600) * b.reps;
+      } else {
+        var gSec = 0, gMi = 0;
+        b.segs.forEach(function(s){ gSec += s.duration; gMi += s.speed*s.duration/3600; });
+        sec += gSec * b.reps;
+        mi += gMi * b.reps;
+      }
+    });
+    return { sec:sec, mi:mi };
+  }
+
+  function el(tag, cls, html){
+    var e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(html!==undefined) e.innerHTML = html;
+    return e;
+  }
+
+  function valueInput(cls, field, value, extra){
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.inputMode = (field==='speed' || field==='incline') ? 'decimal' : (field==='reps' ? 'numeric' : 'text');
+    input.className = 'val-input mono ' + cls;
+    input.value = value;
+    input.dataset.field = field;
+    if(extra) Object.keys(extra).forEach(function(k){ input.dataset[k] = extra[k]; });
+    return input;
+  }
+
+  function dragHandleEl(){
+    var span = el('span','drag-handle');
+    span.innerHTML = '<svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor">'
+      + '<circle cx="2" cy="2" r="1.4"/><circle cx="8" cy="2" r="1.4"/>'
+      + '<circle cx="2" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/>'
+      + '<circle cx="2" cy="14" r="1.4"/><circle cx="8" cy="14" r="1.4"/></svg>';
+    return span;
+  }
+
+  function renderCtrlCluster(){
+    var cluster = el('div','ctrl-cluster');
+    cluster.appendChild(el('button','ctrl-btn','↑')).dataset.action = 'up';
+    cluster.appendChild(el('button','ctrl-btn','↓')).dataset.action = 'down';
+    var dup = el('button','ctrl-btn duplicate');
+    dup.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+      + '<rect x="9" y="9" width="11" height="11" rx="2"/>'
+      + '<path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>';
+    dup.dataset.action = 'duplicate';
+    cluster.appendChild(dup);
+    cluster.appendChild(el('button','ctrl-btn delete','✕')).dataset.action = 'delete';
+    return cluster;
+  }
+
+  function renderSingleCard(b){
+    var meta = TYPE_META[b.type];
+    var card = el('div','block-card');
+    card.style.setProperty('--type-color', meta.color);
+    card.dataset.id = b.id;
+
+    var row1 = el('div','card-row1');
+    row1.appendChild(dragHandleEl());
+    row1.appendChild(el('div','badge', meta.label));
+
+    var speedField = el('div','value-field');
+    speedField.appendChild(valueInput('speed-input','speed', fmtSpeed(b.speed)));
+    speedField.appendChild(el('span','unit-suffix','mph'));
+    row1.appendChild(speedField);
+
+    var inclineField = el('div','value-field');
+    inclineField.appendChild(valueInput('incline-input','incline', fmtIncline(b.incline)));
+    inclineField.appendChild(el('span','unit-suffix','%'));
+    row1.appendChild(inclineField);
+
+    row1.appendChild(renderCtrlCluster());
+    card.appendChild(row1);
+
+    var row2 = el('div','card-row2');
+    var durField = el('div','value-field');
+    durField.appendChild(valueInput('dur-input','duration', formatDuration(b.duration)));
+    row2.appendChild(durField);
+
+    var repsField = el('div','reps-field');
+    repsField.appendChild(el('span',null,'×'));
+    repsField.appendChild(valueInput('reps-input','reps', b.reps));
+    row2.appendChild(repsField);
+    card.appendChild(row2);
+
+    if(b.id === state.lastAddedId) card.classList.add('just-added');
+    return card;
+  }
+
+  function renderGroupCard(b){
+    var card = el('div','group-card');
+    card.dataset.id = b.id;
+
+    var head = el('div','group-head');
+    head.appendChild(dragHandleEl());
+    head.appendChild(el('div','group-title','Interval block'));
+    var repsField = el('div','group-reps-field');
+    repsField.appendChild(el('span',null,'×'));
+    repsField.appendChild(valueInput('reps-input','reps', b.reps));
+    head.appendChild(repsField);
+    head.appendChild(renderCtrlCluster());
+    card.appendChild(head);
+
+    b.segs.forEach(function(s, i){
+      var meta = TYPE_META[s.type];
+      var row2 = el('div','group-seg');
+      var dot = el('div','dot'); dot.style.setProperty('--type-color', meta.color);
+      row2.appendChild(dot);
+      row2.appendChild(el('div','seg-label', meta.label));
+
+      var speedField = el('div','value-field');
+      speedField.appendChild(valueInput('speed-input','speed', fmtSpeed(s.speed), {segIndex:i}));
+      speedField.appendChild(el('span','unit-suffix','mph'));
+      row2.appendChild(speedField);
+
+      var inclineField = el('div','value-field');
+      inclineField.appendChild(valueInput('incline-input','incline', fmtIncline(s.incline), {segIndex:i}));
+      inclineField.appendChild(el('span','unit-suffix','%'));
+      row2.appendChild(inclineField);
+
+      var durField = el('div','value-field');
+      durField.appendChild(valueInput('dur-input','duration', formatDuration(s.duration), {segIndex:i}));
+      row2.appendChild(durField);
+
+      card.appendChild(row2);
+    });
+
+    if(b.id === state.lastAddedId) card.classList.add('just-added');
+    return card;
+  }
+
+  function renderPlan(){
+    var list = document.getElementById('planList');
+    list.innerHTML = '';
+    state.blocks.forEach(function(b){
+      list.appendChild(b.kind==='single' ? renderSingleCard(b) : renderGroupCard(b));
+    });
+    var totals = computeTotals(state.blocks);
+    document.getElementById('totalTime').textContent = formatDuration(totals.sec);
+    document.getElementById('totalDist').textContent = totals.mi.toFixed(2) + ' mi';
+    document.getElementById('segCount').textContent = state.blocks.length;
+    state.lastAddedId = null;
+  }
+
+  document.getElementById('planList').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-action]');
+    if(!btn) return;
+    var card = e.target.closest('[data-id]');
+    var idx = state.blocks.findIndex(function(b){ return b.id===card.dataset.id; });
+    if(idx<0) return;
+    var action = btn.dataset.action;
+    if(action==='delete'){
+      state.blocks.splice(idx,1);
+    } else if(action==='duplicate'){
+      var copy = cloneBlocks([state.blocks[idx]])[0];
+      state.blocks.splice(idx+1, 0, copy);
+      state.lastAddedId = copy.id;
+    } else if(action==='up' && idx>0){
+      var tmp = state.blocks[idx-1]; state.blocks[idx-1]=state.blocks[idx]; state.blocks[idx]=tmp;
+    } else if(action==='down' && idx<state.blocks.length-1){
+      var tmp2 = state.blocks[idx+1]; state.blocks[idx+1]=state.blocks[idx]; state.blocks[idx]=tmp2;
+    }
+    renderPlan();
+  });
+
+  // ---- Drag to reorder / drag to trash ----
+  var dragCtx = null;
+
+  function getDragAfterElement(container, y){
+    var candidates = Array.prototype.filter.call(container.children, function(child){
+      return child !== dragCtx.placeholder;
+    });
+    return candidates.reduce(function(closest, child){
+      var box = child.getBoundingClientRect();
+      var offset = y - box.top - box.height / 2;
+      if(offset < 0 && offset > closest.offset) return { offset:offset, element:child };
+      return closest;
+    }, { offset:-Infinity, element:null }).element;
+  }
+
+  function onDragMove(e){
+    if(!dragCtx || e.pointerId !== dragCtx.pointerId) return;
+    e.preventDefault();
+    var x = e.clientX - dragCtx.offsetX, y = e.clientY - dragCtx.offsetY;
+    dragCtx.card.style.left = x + 'px';
+    dragCtx.card.style.top = y + 'px';
+
+    var list = document.getElementById('planList');
+    var after = getDragAfterElement(list, e.clientY);
+    if(after == null) list.appendChild(dragCtx.placeholder);
+    else if(after !== dragCtx.placeholder) list.insertBefore(dragCtx.placeholder, after);
+
+    var trashZone = document.getElementById('trashZone');
+    var t = trashZone.getBoundingClientRect();
+    var overTrash = e.clientY >= t.top && e.clientY <= t.bottom && e.clientX >= t.left && e.clientX <= t.right;
+    dragCtx.overTrash = overTrash;
+    trashZone.classList.toggle('armed', overTrash);
+    dragCtx.card.classList.toggle('over-trash', overTrash);
+
+    var copyZone = document.getElementById('copyZone');
+    var c = copyZone.getBoundingClientRect();
+    var overCopy = !overTrash && e.clientY >= c.top && e.clientY <= c.bottom && e.clientX >= c.left && e.clientX <= c.right;
+    dragCtx.overCopy = overCopy;
+    copyZone.classList.toggle('armed', overCopy);
+    dragCtx.card.classList.toggle('over-copy', overCopy);
+  }
+
+  function onDragEnd(e){
+    if(!dragCtx || e.pointerId !== dragCtx.pointerId) return;
+    document.removeEventListener('pointermove', onDragMove);
+    document.removeEventListener('pointerup', onDragEnd);
+    document.removeEventListener('pointercancel', onDragEnd);
+    document.documentElement.classList.remove('dragging-active');
+    document.getElementById('phoneRoot').classList.remove('dragging');
+    document.getElementById('trashZone').classList.remove('armed');
+    document.getElementById('copyZone').classList.remove('armed');
+
+    var ctx = dragCtx;
+    var card = ctx.card, placeholder = ctx.placeholder;
+    var consumed = ctx.overTrash || ctx.overCopy;
+    var target = ctx.overTrash
+      ? document.querySelector('#trashZone svg').getBoundingClientRect()
+      : ctx.overCopy
+        ? document.querySelector('#copyZone svg').getBoundingClientRect()
+        : placeholder.getBoundingClientRect();
+
+    card.style.transition = 'left .18s ease, top .18s ease, transform .18s ease, opacity .18s ease';
+    if(consumed){
+      card.style.left = (target.left + target.width/2 - card.offsetWidth/2) + 'px';
+      card.style.top = (target.top + target.height/2 - card.offsetHeight/2) + 'px';
+      card.style.transform = 'scale(.35)';
+      card.style.opacity = '0';
+    } else {
+      card.style.left = target.left + 'px';
+      card.style.top = target.top + 'px';
+    }
+
+    var finished = false;
+    var fallback = setTimeout(finish, 260);
+    card.addEventListener('transitionend', finish, { once:true });
+
+    function finish(){
+      if(finished) return;
+      finished = true;
+      clearTimeout(fallback);
+      if(ctx.overTrash){
+        var idx = state.blocks.findIndex(function(b){ return b.id === ctx.blockId; });
+        if(idx >= 0) state.blocks.splice(idx, 1);
+      } else if(ctx.overCopy){
+        var srcIdx = state.blocks.findIndex(function(b){ return b.id === ctx.blockId; });
+        if(srcIdx >= 0){
+          var dup = cloneBlocks([state.blocks[srcIdx]])[0];
+          state.blocks.splice(srcIdx + 1, 0, dup);
+          state.lastAddedId = dup.id;
+        }
+      } else {
+        var order = Array.prototype.map.call(document.getElementById('planList').children, function(ch){
+          return ch === placeholder ? ctx.blockId : ch.dataset.id;
+        });
+        var byId = {};
+        state.blocks.forEach(function(b){ byId[b.id] = b; });
+        state.blocks = order.map(function(id){ return byId[id]; }).filter(Boolean);
+      }
+      card.remove();
+      placeholder.remove();
+      dragCtx = null;
+      renderPlan();
+    }
+  }
+
+  function startDrag(e, card){
+    var rect = card.getBoundingClientRect();
+    var placeholder = el('div','drag-placeholder');
+    placeholder.style.height = rect.height + 'px';
+    card.parentNode.insertBefore(placeholder, card);
+    document.body.appendChild(card);
+    card.classList.add('dragging');
+    card.style.width = rect.width + 'px';
+    card.style.left = rect.left + 'px';
+    card.style.top = rect.top + 'px';
+    card.style.margin = '0';
+
+    dragCtx = {
+      pointerId: e.pointerId,
+      blockId: card.dataset.id,
+      card: card,
+      placeholder: placeholder,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      overTrash: false
+    };
+
+    document.documentElement.classList.add('dragging-active');
+    document.getElementById('phoneRoot').classList.add('dragging');
+    document.addEventListener('pointermove', onDragMove);
+    document.addEventListener('pointerup', onDragEnd);
+    document.addEventListener('pointercancel', onDragEnd);
+    onDragMove(e);
+  }
+
+  document.getElementById('planList').addEventListener('pointerdown', function(e){
+    if(e.button !== undefined && e.button !== 0) return;
+    var handle = e.target.closest('.drag-handle');
+    if(!handle) return;
+    var card = handle.closest('[data-id]');
+    if(!card) return;
+    e.preventDefault();
+
+    var pointerId = e.pointerId, pointerType = e.pointerType;
+    var startX = e.clientX, startY = e.clientY;
+    var longPressTimer = null;
+
+    function cleanup(){
+      clearTimeout(longPressTimer);
+      document.removeEventListener('pointermove', onPendingMove);
+      document.removeEventListener('pointerup', onPendingUp);
+      document.removeEventListener('pointercancel', onPendingUp);
+    }
+    function onPendingMove(ev){
+      if(ev.pointerId !== pointerId) return;
+      var dx = ev.clientX - startX, dy = ev.clientY - startY;
+      if(Math.sqrt(dx*dx + dy*dy) > 6){
+        cleanup();
+        if(pointerType === 'mouse') startDrag(ev, card);
+        // touch/pen: movement before the long-press fires reads as a scroll, not a drag
+      }
+    }
+    function onPendingUp(ev){
+      if(ev.pointerId !== pointerId) return;
+      cleanup();
+    }
+
+    document.addEventListener('pointermove', onPendingMove);
+    document.addEventListener('pointerup', onPendingUp);
+    document.addEventListener('pointercancel', onPendingUp);
+
+    if(pointerType !== 'mouse'){
+      longPressTimer = setTimeout(function(){
+        cleanup();
+        startDrag(e, card);
+      }, 400);
+    }
+  });
+
+  function commitValueInput(input){
+    var card = input.closest('[data-id]');
+    if(!card) return;
+    var block = state.blocks.find(function(b){ return b.id===card.dataset.id; });
+    if(!block) return;
+    var field = input.dataset.field;
+
+    if(block.kind === 'single'){
+      if(field==='speed') block.speed = parseSpeedInput(input.value, block.speed);
+      else if(field==='incline') block.incline = parseInclineInput(input.value, block.incline);
+      else if(field==='duration') block.duration = parseDurationInput(input.value, block.duration);
+      else if(field==='reps') block.reps = parseRepsInput(input.value, block.reps);
+    } else {
+      if(field==='reps'){
+        block.reps = parseRepsInput(input.value, block.reps);
+      } else {
+        var seg = block.segs[parseInt(input.dataset.segIndex, 10)];
+        if(!seg) return;
+        if(field==='speed') seg.speed = parseSpeedInput(input.value, seg.speed);
+        else if(field==='incline') seg.incline = parseInclineInput(input.value, seg.incline);
+        else if(field==='duration') seg.duration = parseDurationInput(input.value, seg.duration);
+      }
+    }
+    renderPlan();
+  }
+
+  document.getElementById('planList').addEventListener('focusout', function(e){
+    if(e.target.classList && e.target.classList.contains('val-input')) commitValueInput(e.target);
+  });
+  document.getElementById('planList').addEventListener('keydown', function(e){
+    if(e.target.classList && e.target.classList.contains('val-input') && e.key === 'Enter'){
+      e.preventDefault();
+      e.target.blur();
+    }
+  });
+
+  function renderTemplates(){
+    var row = document.getElementById('templateRow');
+    row.innerHTML = '';
+    TEMPLATES.forEach(function(t, i){
+      var chip = el('button','tpl-chip'+(i===state.activeTemplate?' active':''), t.name);
+      chip.type = 'button';
+      chip.addEventListener('click', function(){
+        state.activeTemplate = i;
+        state.blocks = cloneBlocks(t.blocks);
+        document.getElementById('nameInput').value = t.name;
+        document.getElementById('nameError').hidden = true;
+        renderTemplates();
+        renderPlan();
+      });
+      row.appendChild(chip);
+    });
+  }
+
+  function setComposerAccent(){
+    document.querySelector('.composer-inner').style.setProperty('--type-accent', COMPOSER_TYPE_META[state.composer.type].color);
+  }
+
+  function renderTypeRow(){
+    var row = document.getElementById('typeRow');
+    row.innerHTML = '';
+    Object.keys(COMPOSER_TYPE_META).forEach(function(key){
+      var pill = el('button','pill'+(state.composer.type===key?' active':''), COMPOSER_TYPE_META[key].label);
+      pill.type='button';
+      pill.addEventListener('click', function(){
+        state.composer.type = key;
+        setComposerAccent();
+        renderTypeRow();
+        renderValueFields();
+        updateRepLabel();
+      });
+      row.appendChild(pill);
+    });
+  }
+
+  function updateRepLabel(){
+    document.getElementById('repLabel').textContent =
+      state.composer.type === 'interval' ? 'Repeat this interval' : 'Repeat this segment';
+  }
+
+  // Generic [-] [editable value] [+] control. `opts.get`/`opts.set` read and write
+  // the underlying number; `opts.format`/`opts.parse` handle the text box.
+  function createStepperField(labelHtml, opts){
+    var field = el('div','field');
+    field.appendChild(el('div','field-label', labelHtml));
+    var row = el('div','stepper');
+    var minus = el('button','step-btn','−'); minus.type='button';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.inputMode = opts.inputMode || 'decimal';
+    input.className = 'composer-input mono' + (opts.wide ? ' dur' : '');
+    var plus = el('button','step-btn','+'); plus.type='button';
+
+    function refresh(){ input.value = opts.format(opts.get()); }
+    function step(sign){
+      opts.set(clamp(Math.round((opts.get() + sign*opts.step)*10)/10, opts.min, opts.max));
+      refresh();
+    }
+    minus.addEventListener('click', function(){ step(-1); });
+    plus.addEventListener('click', function(){ step(1); });
+    input.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); e.target.blur(); } });
+    input.addEventListener('focusout', function(e){ opts.set(opts.parse(e.target.value, opts.get())); refresh(); });
+
+    row.appendChild(minus); row.appendChild(input); row.appendChild(plus);
+    field.appendChild(row);
+    refresh();
+    return field;
+  }
+
+  // Duration keeps its preset pill row in addition to the [-] [value] [+] control.
+  function createDurationField(get, set){
+    var field = el('div','field');
+    field.appendChild(el('div','field-label','Duration'));
+    var pillRow = el('div','pill-row');
+    var stepRow = el('div','stepper');
+    var minus = el('button','step-btn','−'); minus.type='button';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'composer-input mono dur';
+    var plus = el('button','step-btn','+'); plus.type='button';
+
+    function refresh(){
+      input.value = formatDuration(get());
+      pillRow.innerHTML = '';
+      DURATION_PILLS.forEach(function(sec){
+        var pill = el('button','pill'+(get()===sec?' active':''), formatDuration(sec));
+        pill.type='button';
+        pill.addEventListener('click', function(){ set(sec); refresh(); });
+        pillRow.appendChild(pill);
+      });
+    }
+    minus.addEventListener('click', function(){ set(clamp(get()-15, 15, 7200)); refresh(); });
+    plus.addEventListener('click', function(){ set(clamp(get()+15, 15, 7200)); refresh(); });
+    input.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); e.target.blur(); } });
+    input.addEventListener('focusout', function(e){ set(parseDurationInput(e.target.value, get())); refresh(); });
+
+    stepRow.appendChild(minus); stepRow.appendChild(input); stepRow.appendChild(plus);
+    field.appendChild(pillRow);
+    field.appendChild(stepRow);
+    refresh();
+    return field;
+  }
+
+  function buildSubPanel(heading, key){
+    var c = state.composer[key];
+    var wrap = el('div', heading ? 'subpanel' : null);
+    if(heading){
+      wrap.style.setProperty('--subpanel-color', TYPE_META[key].color);
+      wrap.appendChild(el('div','subpanel-title', heading));
+    }
+    wrap.appendChild(createStepperField('Speed <span class="unit">mph</span>', {
+      get:function(){ return c.speed; }, set:function(v){ c.speed=v; },
+      step:0.1, min:0.5, max:12, format:fmtSpeed, parse:parseSpeedInput
+    }));
+    wrap.appendChild(createStepperField('Incline <span class="unit">%</span>', {
+      get:function(){ return c.incline; }, set:function(v){ c.incline=v; },
+      step:1, min:0, max:20, format:fmtIncline, parse:parseInclineInput
+    }));
+    wrap.appendChild(createDurationField(
+      function(){ return c.durationSec; },
+      function(v){ c.durationSec=v; }
+    ));
+    return wrap;
+  }
+
+  function renderValueFields(){
+    var container = document.getElementById('valueFields');
+    container.innerHTML = '';
+    if(state.composer.type === 'interval'){
+      container.appendChild(buildSubPanel('Work','work'));
+      container.appendChild(buildSubPanel('Rest','rest'));
+    } else {
+      container.appendChild(buildSubPanel(null,'simple'));
+    }
+  }
+
+  document.getElementById('repMinus').addEventListener('click', function(){
+    state.composer.reps = Math.max(1, state.composer.reps - 1);
+    document.getElementById('repReadout').textContent = '×'+state.composer.reps;
+  });
+  document.getElementById('repPlus').addEventListener('click', function(){
+    state.composer.reps = Math.min(20, state.composer.reps + 1);
+    document.getElementById('repReadout').textContent = '×'+state.composer.reps;
+  });
+
+  document.getElementById('addBtn').addEventListener('click', function(){
+    var c = state.composer;
+    var newBlock = (c.type === 'interval')
+      ? group(c.reps, [
+          ['work', c.work.speed, c.work.incline, c.work.durationSec],
+          ['rest', c.rest.speed, c.rest.incline, c.rest.durationSec]
+        ])
+      : single(c.type, c.simple.speed, c.simple.incline, c.simple.durationSec, c.reps);
+    var insertAt = state.blocks.length;
+    var last = state.blocks[state.blocks.length-1];
+    if(last && last.kind==='single' && last.type==='cooldown') insertAt = state.blocks.length - 1;
+    state.blocks.splice(insertAt, 0, newBlock);
+    state.lastAddedId = newBlock.id;
+    renderPlan();
+  });
+
+
+  // ---- Handing a finished plan back to the app ----
+  //
+  // This mockup has no persistence of its own — it never did. What's new
+  // here is just enough to make "Save" actually do something: build the
+  // same shape the app's IntervalWorkoutFile files are (see
+  // src/lib/intervals/types.ts and serialize.ts — kept in sync by hand
+  // since this file can't import from the app), then either hand it
+  // straight to whichever window opened this one as a popup (the normal
+  // path — see interval-workout-card.tsx's openBuilder/handleBuilderMessage),
+  // or, if this page wasn't opened as a popup (bookmarked, typed in
+  // directly, opener link lost), fall back to downloading a
+  // .treadlogger.json the same way the app's own "Download workout" button
+  // does, so "Load workout" in the app can pick it up instead. Either way
+  // this page closes itself once the workout is off its hands, since it
+  // has nowhere else useful to go from here.
+  var INTERVAL_WORKOUT_SCHEMA = 'treadlogger.interval-workout';
+  var INTERVAL_WORKOUT_FILE_VERSION = 1;
+  var BUILDER_MESSAGE_SOURCE = 'treadlogger-interval-mockup';
+
+  function slugifyName(name){
+    var slug = String(name).trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+    return (slug || 'workout') + '.treadlogger.json';
+  }
+
+  // Mirrors state.blocks (this file's own shape: speed/incline/duration,
+  // kind 'single'|'group', a group's two segs in work-then-rest order) into
+  // the app's WorkoutBlock shape (speedMph/inclinePercent/durationSec, kind
+  // 'single'|'interval', an interval's work/rest as named legs).
+  function buildWorkoutFile(name){
+    var blocks = state.blocks.map(function(b){
+      if(b.kind === 'single'){
+        return {
+          kind:'single', type:b.type,
+          speedMph:b.speed, inclinePercent:b.incline, durationSec:b.duration,
+          reps:b.reps
+        };
+      }
+      var work = b.segs[0], rest = b.segs[1];
+      return {
+        kind:'interval', reps:b.reps,
+        work:{ speedMph:work.speed, inclinePercent:work.incline, durationSec:work.duration },
+        rest:{ speedMph:rest.speed, inclinePercent:rest.incline, durationSec:rest.duration }
+      };
+    });
+    return { schema:INTERVAL_WORKOUT_SCHEMA, version:INTERVAL_WORKOUT_FILE_VERSION, name:name, blocks:blocks };
+  }
+
+  function downloadWorkoutFile(workout){
+    var text = JSON.stringify(workout, null, 2) + '\n';
+    var blob = new Blob([text], { type:'application/json' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = slugifyName(workout.name);
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    // Same margin the app's own download helper uses — revoking immediately
+    // can race the download starting, in some browsers.
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 10000);
+  }
+
+  function showNameError(message){
+    var errorEl = document.getElementById('nameError');
+    errorEl.textContent = message;
+    errorEl.hidden = false;
+  }
+
+  function isPopup(){
+    return !!(window.opener && !window.opener.closed);
+  }
+
+  function handleSave(){
+    var nameInput = document.getElementById('nameInput');
+    var name = nameInput.value.trim();
+    if(!name){
+      showNameError('Give the workout a name first');
+      nameInput.focus();
+      return;
+    }
+    if(state.blocks.length === 0){
+      showNameError('Add at least one block first');
+      return;
+    }
+    document.getElementById('nameError').hidden = true;
+
+    var workout = buildWorkoutFile(name);
+    if(isPopup()){
+      window.opener.postMessage({ source:BUILDER_MESSAGE_SOURCE, type:'save', workout:workout }, window.location.origin);
+      window.close();
+    } else {
+      downloadWorkoutFile(workout);
+    }
+  }
+
+  function handleBack(){
+    if(isPopup()){
+      window.opener.postMessage({ source:BUILDER_MESSAGE_SOURCE, type:'cancel' }, window.location.origin);
+      window.close();
+    }
+    // Not a popup (bookmarked / typed in directly) — nothing useful to hand
+    // back to, so Back is just inert rather than pretending to cancel
+    // something.
+  }
+
+  document.getElementById('saveBtn').addEventListener('click', handleSave);
+  document.getElementById('backBtn').addEventListener('click', handleBack);
+  document.getElementById('nameInput').addEventListener('input', function(e){
+    if(e.target.value.trim()) document.getElementById('nameError').hidden = true;
+  });
+  document.getElementById('nameInput').value = TEMPLATES[state.activeTemplate].name;
+
+  renderTemplates();
+  renderTypeRow();
+  renderValueFields();
+  updateRepLabel();
+  setComposerAccent();
+  renderPlan();
+})();
+</script>
+
+</body>
+</html>
