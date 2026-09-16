@@ -60,7 +60,13 @@ describe("serializeIntervalWorkoutFile / parseIntervalWorkoutFile", () => {
   });
 
   it("rejects an interval block missing its rest leg", () => {
-    const { rest: _rest, ...intervalWithoutRest } = sample.blocks[1] as Record<string, unknown>;
+    // `IntervalBlock` has no index signature, so TS won't allow a direct
+    // `as Record<string, unknown>` cast (it can't prove the two types
+    // overlap) — going through `unknown` first is what the compiler itself
+    // suggests for "I know this is a plain object, trust me" casts like
+    // this one, used here purely to destructure off a known field name for
+    // a deliberately-malformed test fixture.
+    const { rest: _rest, ...intervalWithoutRest } = sample.blocks[1] as unknown as Record<string, unknown>;
     const bad = { ...sample, blocks: [intervalWithoutRest] };
     expect(() => parseIntervalWorkoutFile(JSON.stringify(bad))).toThrow(/blocks\[0\]\.rest/);
   });
