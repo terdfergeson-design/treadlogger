@@ -399,6 +399,24 @@ describe("WorkoutRecorder", () => {
     expect(recorder.snapshot.startedAt).toBeUndefined();
   });
 
+  it("restore replaces the snapshot outright, for loading a recovered workout", () => {
+    const recorder = newRecorder();
+    recorder.start(T0);
+    recorder.tick(reading({ speedKph: 10, totalDistanceM: 25 }, 140), T0 + 1_000);
+
+    const saved = { ...recorder.snapshot, state: "finished" as const, endedAt: T0 + 5_000 };
+    const fresh = newRecorder();
+    fresh.restore(saved);
+
+    expect(fresh.snapshot).toEqual(saved);
+
+    // A tick after restore is a no-op: restore is playback only, not a point
+    // to resume ticking from — ticking against a `"finished"` snapshot is
+    // already a no-op for any recorder, restored or not.
+    fresh.tick(reading({ speedKph: 10, totalDistanceM: 999 }), T0 + 6_000);
+    expect(fresh.snapshot).toEqual(saved);
+  });
+
   it("notifies subscribers when the snapshot changes", () => {
     const recorder = newRecorder();
     let notifications = 0;

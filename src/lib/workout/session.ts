@@ -224,6 +224,22 @@ export class WorkoutRecorder extends ObservableStore<WorkoutSnapshot> {
   }
 
   /**
+   * Loads a previously-recorded snapshot — recovered from storage after an
+   * accidental refresh — as the current session, bypassing the normal
+   * start/tick/finish lifecycle entirely.
+   *
+   * This is playback only: the caller is expected to hand in a snapshot
+   * whose `state` is already `"finished"` (an interrupted `"active"` or
+   * `"paused"` recovery is finalized by the caller first, since the device
+   * connections a live workout depended on are gone after a reload anyway).
+   * Ticking is never resumed against a restored snapshot, so none of the
+   * running accumulators above need to be rebuilt to match it.
+   */
+  restore(snapshot: WorkoutSnapshot): void {
+    this.replace(snapshot);
+  }
+
+  /**
    * Folds one reading into the session.
    *
    * Called on a fixed interval by the caller. Readings taken while paused or

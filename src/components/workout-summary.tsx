@@ -9,6 +9,7 @@ import {
   Loader2,
   Share2,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -48,7 +49,8 @@ const DISPLAY_UNIT = "mph";
  * the FIT/export controls below it are deliberately left out of the image.
  */
 export function WorkoutSummary() {
-  const { workout, encodedActivity, downloadActivity, maxHeartRateBpm, mode } = useWorkout();
+  const { workout, encodedActivity, downloadActivity, maxHeartRateBpm, mode, clearSavedWorkoutData } =
+    useWorkout();
   const [capturingScreenshot, setCapturingScreenshot] = useState(false);
   const [capturingShareCard, setCapturingShareCard] = useState(false);
 
@@ -109,9 +111,24 @@ export function WorkoutSummary() {
                 {workout.samples.length.toLocaleString()} samples recorded
               </CardDescription>
             </div>
-            {mode === "simulator" ? (
-              <Badge variant="secondary">Simulated workout</Badge>
-            ) : null}
+            <div className="flex items-center gap-2">
+              {mode === "simulator" ? (
+                <Badge variant="secondary">Simulated workout</Badge>
+              ) : null}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Delete saved workout data"
+                title="Delete saved workout data"
+                onClick={clearSavedWorkoutData}
+                // Excluded from the screenshot/share-card capture (see
+                // capture.ts's onclone-based tricks for the same idea) — this
+                // is app chrome, not part of the run's record.
+                data-html2canvas-ignore="true"
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
           </div>
         </CardHeader>
 

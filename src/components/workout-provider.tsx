@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -35,6 +36,11 @@ import {
 import { downloadBytes } from "@/lib/fit/download";
 import { verifyFitBytes, type FitVerification } from "@/lib/fit/verify";
 import { WorkoutRecorder, type WorkoutSnapshot } from "@/lib/workout/session";
+import {
+  clearSavedWorkout,
+  loadSavedWorkout,
+  saveWorkout,
+} from "@/lib/workout/persistence";
 
 /**
  * Wires the device sources, the recorder and the FIT export together, and is the
@@ -46,6 +52,18 @@ export type DeviceMode = "bluetooth" | "simulator";
 
 /** How often the recorder folds a device reading into the session. */
 const SAMPLE_INTERVAL_MS = 1_000;
+
+/**
+ * How often the in-progress workout is written to storage, in samples
+ * rather than a fixed timer — saving on every single tick would mean
+ * re-serializing the whole (ever-growing) sample log to `localStorage` once
+ * a second for the entire run, which is unnecessary: losing at most a few
+ * seconds of the most recent samples to a refresh is an acceptable trade for
+ * not doing that. State transitions (start/pause/resume/finish) always save
+ * immediately regardless of this, so a refresh right at one of those never
+ * loses the transition itself.
+ */
+const PERSIST_EVERY_N_SAMPLES = 5;
 
 /**
  * This treadmill always begins a workout at 0.5 mph, no matter what target
@@ -108,6 +126,14 @@ interface WorkoutContextValue {
   resumeWorkout: () => Promise<void>;
   finishWorkout: () => Promise<void>;
   discardWorkout: () => void;
+  /**
+   * Deletes the persisted copy of this workout (see persistence.ts) without
+   * touching the recorder or the on-screen summary — unlike `discardWorkout`,
+   * which also resets the recorder and returns to "idle". For manually
+   * telling the app "I've got what I need, stop keeping this recoverable"
+   * while still looking at the finished summary.
+   */
+  clearSavedWorkoutData: () => void;
 
   encodedActivity: EncodedActivity | null;
   downloadActivity: () => void;
@@ -146,6 +172,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [recorder] = useState(
     () => new WorkoutRecorder({ maxHeartRateBpm, sampleIntervalMs: SAMPLE_INTERVAL_MS }),
   );
+  const lastPersistedSampleCountRef = useRef(0);
 
   const treadmill = useSyncExternalStore(
     sources.treadmill.subscribe,
@@ -198,6 +225,86 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
 
     return () => clearInterval(timer);
   }, [workout.state, recorder, sources]);
+
+  // Recovers a workout left behind by a refresh, a crashed tab, or the
+  // runner just navigating away before downloading. Runs once, on mount,
+  // before the runner can start a new workout of their own — an interrupted
+  // "active"/"paused" session is finalized as "finished" here rather than
+  // resumed, since the device connections it depended on don't survive a
+  // reload anyway; a session already "finished" (recorded, but the FIT file
+  // was never downloaded) is restored as-is. Either way the FIT bytes are
+  // rebuilt the same way `finishWorkout` builds them the first time, so the
+  // download/screenshot/share-card buttons work immediately.
+  useEffect(() => {
+    const saved = loadSavedWorkout();
+    const startedAt = saved?.snapshot.startedAt;
+    if (!saved || startedAt === undefined) return;
+
+    const recovered: WorkoutSnapshot =
+      saved.snapshot.state === "finished"
+        ? saved.snapshot
+        : {
+            ...saved.snapshot,
+            state: "finished",
+            endedAt: saved.snapshot.endedAt ?? saved.snapshot.samples.at(-1)?.timestamp ?? startedAt,
+          };
+
+    recorder.restore(recovered);
+    lastPersistedSampleCountRef.current = recovered.samples.length;
+    setMaxHeartRateBpm(saved.metadata.maxHeartRateBpm);
+    if (saved.metadata.mode !== mode) {
+      setModeState(saved.metadata.mode);
+      setSources(createSources(saved.metadata.mode));
+    }
+
+    try {
+      const bytes = encodeFitActivity(
+        fitActivityInputFromWorkout(recovered, {
+          treadmillName: saved.metadata.treadmillName,
+          heartRateMonitorName: saved.metadata.heartRateMonitorName,
+          simulated: saved.metadata.mode === "simulator",
+        }),
+      );
+
+      setEncodedActivity({
+        bytes,
+        fileName: fitFileName(new Date(startedAt), saved.metadata.mode === "simulator"),
+        verification: verifyFitBytes(bytes),
+      });
+      toast.info("Recovered an unsaved workout", {
+        description: `From ${new Date(startedAt).toLocaleString()} — a refresh interrupted it before it was saved. Download it below, or click Clear to discard it.`,
+      });
+    } catch (error) {
+      toast.error("Recovered a workout, but could not rebuild its FIT file", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+    // Deliberately runs once on mount only. Re-running this whenever `mode`
+    // changes (which this same effect can trigger) would try to re-import
+    // the same saved workout every time the runner switches modes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Mirrors the in-progress or just-finished workout to storage so it
+  // survives a refresh. Never cleared here — only `startWorkout` and
+  // `discardWorkout` remove the saved copy (see persistence.ts).
+  useEffect(() => {
+    if (workout.state === "idle") return;
+
+    const sampleCount = workout.samples.length;
+    const isStateTransition = workout.state !== "active";
+    const enoughNewSamples =
+      sampleCount - lastPersistedSampleCountRef.current >= PERSIST_EVERY_N_SAMPLES;
+    if (!isStateTransition && !enoughNewSamples) return;
+
+    lastPersistedSampleCountRef.current = sampleCount;
+    saveWorkout(workout, {
+      mode,
+      maxHeartRateBpm,
+      treadmillName: sources.treadmill.snapshot.deviceName,
+      heartRateMonitorName: sources.heartRate.snapshot.deviceName,
+    });
+  }, [workout, mode, maxHeartRateBpm, sources]);
 
   // Adopt the machine's own limits once it reports them. The requested targets
   // are clamped on the way out rather than rewritten in state, so connecting a
@@ -318,22 +425,38 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   );
 
   const startWorkout = useCallback(async () => {
-    setEncodedActivity(null);
-
-    if (treadmill.connection === "connected") {
-      const started = await guard(async () => {
-        await sources.treadmill.setTargetSpeed(targetSpeedKph);
-        await sources.treadmill.start();
-      }, "The treadmill would not start");
-
-      // Recording a workout the belt never began would produce a file full of
-      // zeroes, so the recorder only starts once the machine has agreed.
-      if (!started) return;
+    // A workout with no treadmill behind it — bluetooth or simulator — would
+    // just be an empty recording, so require one to be connected first
+    // rather than silently logging nothing.
+    if (treadmill.connection !== "connected") {
+      toast.error("Connect a treadmill first", {
+        description:
+          mode === "simulator"
+            ? "Start the simulated treadmill before starting a workout."
+            : "Pair a treadmill before starting a workout.",
+      });
+      return;
     }
+
+    setEncodedActivity(null);
+    // Starting a new workout is one of the two explicit triggers that may
+    // discard a previously-saved one (the other is the "Clear" button, in
+    // discardWorkout below) — see persistence.ts.
+    clearSavedWorkout();
+    lastPersistedSampleCountRef.current = 0;
+
+    const started = await guard(async () => {
+      await sources.treadmill.setTargetSpeed(targetSpeedKph);
+      await sources.treadmill.start();
+    }, "The treadmill would not start");
+
+    // Recording a workout the belt never began would produce a file full of
+    // zeroes, so the recorder only starts once the machine has agreed.
+    if (!started) return;
 
     recorder.start();
     toast.success("Workout started");
-  }, [guard, recorder, sources.treadmill, targetSpeedKph, treadmill.connection]);
+  }, [guard, mode, recorder, sources.treadmill, targetSpeedKph, treadmill.connection]);
 
   const pauseWorkout = useCallback(async () => {
     if (treadmill.connection === "connected") {
@@ -394,7 +517,16 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     recorder.reset();
     setEncodedActivity(null);
     setRequestedSpeedKph(STARTING_SPEED_KPH);
+    clearSavedWorkout();
+    lastPersistedSampleCountRef.current = 0;
   }, [recorder]);
+
+  const clearSavedWorkoutData = useCallback(() => {
+    clearSavedWorkout();
+    toast.success("Saved workout data cleared", {
+      description: "This workout will no longer be recovered after a refresh.",
+    });
+  }, []);
 
   const downloadActivity = useCallback(() => {
     if (!encodedActivity) return;
@@ -432,6 +564,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       resumeWorkout,
       finishWorkout,
       discardWorkout,
+      clearSavedWorkoutData,
       encodedActivity,
       downloadActivity,
       busy,
@@ -464,6 +597,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       resumeWorkout,
       finishWorkout,
       discardWorkout,
+      clearSavedWorkoutData,
       encodedActivity,
       downloadActivity,
       busy,

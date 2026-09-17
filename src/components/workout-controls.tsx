@@ -28,7 +28,7 @@ export function WorkoutControls() {
             <Button
               size="lg"
               className="flex-1"
-              disabled={busy}
+              disabled={busy || !treadmillConnected}
               onClick={() => void startWorkout()}
             >
               {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
@@ -37,7 +37,7 @@ export function WorkoutControls() {
             <p className="text-muted-foreground text-xs sm:max-w-56">
               {treadmillConnected
                 ? "Starts the belt and begins logging a sample every second."
-                : "Logging starts immediately. Connect a treadmill first to also drive the belt."}
+                : "Connect a treadmill first — bluetooth or simulator — to start a workout."}
             </p>
           </>
         ) : null}
@@ -93,7 +93,12 @@ export function WorkoutControls() {
 
         {workout.state === "finished" ? (
           <>
-            <Button size="lg" className="flex-1" onClick={() => void startWorkout()}>
+            <Button
+              size="lg"
+              className="flex-1"
+              disabled={busy || !treadmillConnected}
+              onClick={() => void startWorkout()}
+            >
               <Play className="size-4" />
               Start another workout
             </Button>
@@ -101,6 +106,11 @@ export function WorkoutControls() {
               <RotateCcw className="size-4" />
               Clear
             </Button>
+            {!treadmillConnected ? (
+              <p className="text-muted-foreground text-xs sm:max-w-56">
+                Connect a treadmill first — bluetooth or simulator — to start another.
+              </p>
+            ) : null}
           </>
         ) : null}
       </CardContent>
