@@ -119,6 +119,16 @@ interface IntervalWorkoutContextValue {
   /** Whether `resumeIntervalRun` would actually do anything right now — a
    *  run is in progress, manually paused, and the workout is active. */
   canResumeRun: boolean;
+  /** Whether the run has reached the end of the plan — the cursor is at or
+   *  past `totalSec`. Stays true (rather than resetting) until the runner
+   *  either restarts it (`restartIntervalRun`) or the run itself ends (a new
+   *  workout starts, or the plan is cleared) — see `elapsedInPlanSec`. */
+  isFinished: boolean;
+  /** Whether `restartIntervalRun` would actually do anything right now — a
+   *  run is in progress and the workout is active. Not gated on `isFinished`
+   *  itself: restarting mid-plan works the same way, the UI just only
+   *  surfaces the button once the plan is actually done. */
+  canRestartRun: boolean;
   /** Begins following the loaded plan from *this* moment — not from the
    *  workout's own start. No-op if `canStartRun` is false. */
   beginIntervalRun: () => void;
@@ -132,6 +142,13 @@ interface IntervalWorkoutContextValue {
    *  last scrubbed to, if anywhere, or otherwise from the point it was
    *  paused at. No-op if `canResumeRun` is false. */
   resumeIntervalRun: () => void;
+  /** Re-anchors the run back to the very start of the plan and keeps
+   *  following it — same idea as `beginIntervalRun`, just without the
+   *  belt-readiness/timeline/not-already-running checks, since the run is
+   *  already under way. Clears any manual pause and re-issues segment 0's
+   *  speed/incline on the next tick, exactly like the very first start.
+   *  No-op if `canRestartRun` is false. */
+  restartIntervalRun: () => void;
   /** While paused, moves the plan's displayed cursor to `sec` (clamped to
    *  the plan's length) without touching the treadmill or the workout's
    *  clock — purely a preview of where `resumeIntervalRun` would pick back
@@ -261,9 +278,18 @@ export function IntervalWorkoutProvider({ children }: { children: React.ReactNod
     : null;
   const activeSegment = elapsedInPlanSec === null ? segmentAt(timeline, 0) : segmentAt(timeline, elapsedInPlanSec);
 
+  // The cursor reaching the end of the plan, not a separate state of its
+  // own — segmentAt/the segment-driving effect above already just holds at
+  // the last segment once elapsedInPlanSec passes totalSec, same as before
+  // this existed. This only names that moment so the card can show it and
+  // offer to restart, rather than silently sitting on the last segment's
+  // (by-then-zero) time-left readout forever.
+  const isFinished = isRunning && totalSec > 0 && elapsedInPlanSec !== null && elapsedInPlanSec >= totalSec;
+
   const canStartRun = plan !== null && !isRunning && workout.state === "active" && isBeltReady;
-  const canPauseRun = isRunning && !isPaused && workout.state === "active";
-  const canResumeRun = isRunning && isPaused && workout.state === "active";
+  const canPauseRun = isRunning && !isPaused && !isFinished && workout.state === "active";
+  const canResumeRun = isRunning && isPaused && !isFinished && workout.state === "active";
+  const canRestartRun = isRunning && workout.state === "active";
 
   // A workout's identity is its startedAt stamp — a fresh one is minted by
   // both the ordinary idle -> active start and by "Start another workout"
@@ -420,6 +446,22 @@ export function IntervalWorkoutProvider({ children }: { children: React.ReactNod
     setIsPaused(false);
   }, [isRunning, isPaused, workout.state, pausedSeekSec, workout.elapsedS]);
 
+  const restartIntervalRun = useCallback(() => {
+    if (!isRunning) return;
+    if (workout.state !== "active") return;
+    // Same re-anchoring beginIntervalRun does for the very first start — the
+    // plan's clock reads 0 from this instant again — minus the checks that
+    // only make sense before a run exists yet (isBeltReady, a loaded plan,
+    // not already running). runWorkoutStartedAtRef is deliberately left
+    // alone: this is still the same run, on the same workout, just restarted
+    // from the top, not a new run being armed.
+    runStartElapsedSecRef.current = workout.elapsedS;
+    lastAppliedIndexRef.current = -1;
+    frozenAtSecRef.current = null;
+    setIsPaused(false);
+    setPausedSeekSec(null);
+  }, [isRunning, workout.state, workout.elapsedS]);
+
   const seekIntervalRun = useCallback(
     (sec: number) => {
       if (!isRunning || !isPaused) return;
@@ -445,9 +487,12 @@ export function IntervalWorkoutProvider({ children }: { children: React.ReactNod
       canStartRun,
       canPauseRun,
       canResumeRun,
+      isFinished,
+      canRestartRun,
       beginIntervalRun,
       pauseIntervalRun,
       resumeIntervalRun,
+      restartIntervalRun,
       seekIntervalRun,
       activeSegment,
       elapsedInPlanSec,
@@ -466,9 +511,12 @@ export function IntervalWorkoutProvider({ children }: { children: React.ReactNod
       canStartRun,
       canPauseRun,
       canResumeRun,
+      isFinished,
+      canRestartRun,
       beginIntervalRun,
       pauseIntervalRun,
       resumeIntervalRun,
+      restartIntervalRun,
       seekIntervalRun,
       activeSegment,
       elapsedInPlanSec,

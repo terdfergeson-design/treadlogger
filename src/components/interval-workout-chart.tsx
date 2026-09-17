@@ -131,6 +131,7 @@ export function IntervalWorkoutChart({
   totalSec,
   elapsedInPlanSec,
   activeSegment,
+  isFinished = false,
   seekable = false,
   onSeek,
 }: {
@@ -138,6 +139,10 @@ export function IntervalWorkoutChart({
   totalSec: number;
   elapsedInPlanSec: number | null;
   activeSegment: TimelineSegment | undefined;
+  /** Whether the run has reached the end of the plan — swaps the usual
+   *  "N:NN left in segment" readout (which would otherwise just sit at
+   *  0:00 forever) for a "Workout complete" one instead. */
+  isFinished?: boolean;
   /** Whether the plot area should behave as a scrubber right now — true
    *  exactly while a caller wants dragging/clicking/arrow-keying it to move
    *  the cursor, e.g. while an interval run is manually paused. */
@@ -250,19 +255,24 @@ export function IntervalWorkoutChart({
   return (
     <div className="space-y-2">
       {activeSegment && elapsedInPlanSec !== null ? (
-        <div className="flex items-center justify-between gap-3 text-xs">
+        <div className="flex items-baseline justify-between gap-3 text-xs">
           <span className={cn("font-semibold", KIND_COLOR[activeSegment.kind].text)}>
             {seekable ? "Resume from: " : "Now: "}
             {activeSegment.label} · {activeSegment.speedMph.toFixed(1)} mph · {activeSegment.inclinePercent.toFixed(0)}%
             {currentElevationFt !== null ? ` · ${Math.round(currentElevationFt)} ft climbed` : ""}
           </span>
-          <span className="text-muted-foreground tabular-nums">
-            {seekable
-              ? "Drag the chart to change"
-              : remainingSec !== null
-                ? `${formatDuration(remainingSec)} left in segment`
-                : null}
-          </span>
+          {isFinished ? (
+            <span className="text-primary font-semibold">Workout complete</span>
+          ) : seekable ? (
+            <span className="text-muted-foreground tabular-nums">Drag the chart to change</span>
+          ) : remainingSec !== null ? (
+            <span className="flex items-baseline gap-1.5">
+              <span className="font-mono text-2xl leading-none font-semibold tabular-nums">
+                {formatDuration(remainingSec)}
+              </span>
+              <span className="text-muted-foreground text-[10px]">left in segment</span>
+            </span>
+          ) : null}
         </div>
       ) : null}
 

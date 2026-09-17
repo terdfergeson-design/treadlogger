@@ -18,7 +18,7 @@ export interface RunnerProfile {
 export const DEFAULT_RUNNER_PROFILE: RunnerProfile = {
   weightKg: 75,
   restingHeartRateBpm: 55,
-  maxHeartRateBpm: 190,
+  maxHeartRateBpm: 210,
   vo2MaxMlPerKgPerMin: 52,
 };
 

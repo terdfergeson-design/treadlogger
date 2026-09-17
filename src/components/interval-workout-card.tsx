@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Download, FolderOpen, ListPlus, Pause, Play, X } from "lucide-react";
+import { CheckCircle2, Download, FolderOpen, ListPlus, Pause, Play, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { IntervalWorkoutChart } from "@/components/interval-workout-chart";
@@ -83,9 +83,12 @@ export function IntervalWorkoutCard() {
     canStartRun,
     canPauseRun,
     canResumeRun,
+    isFinished,
+    canRestartRun,
     beginIntervalRun,
     pauseIntervalRun,
     resumeIntervalRun,
+    restartIntervalRun,
     seekIntervalRun,
     activeSegment,
     elapsedInPlanSec,
@@ -260,24 +263,43 @@ export function IntervalWorkoutCard() {
               totalSec={totalSec}
               elapsedInPlanSec={elapsedInPlanSec}
               activeSegment={activeSegment}
+              isFinished={isFinished}
               seekable={isPaused}
               onSeek={seekIntervalRun}
             />
 
             {isRunning ? (
               <div className="space-y-2">
-                <p className="text-muted-foreground text-xs">
-                  {!workoutRunning
-                    ? "This run has finished."
-                    : isPaused
-                      ? "Paused — driving manually. Drag the chart to change where you'll resume, or just resume to take back over from here."
-                      : workout.state === "active" && !isBeltReady
-                        ? `Resuming — ${beltWaitingText}`
-                        : "Following this plan. Use the workout controls above to pause or finish."}
-                </p>
+                {workoutRunning && isFinished ? (
+                  <div className="border-primary/30 bg-primary/10 text-primary flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold">
+                    <CheckCircle2 className="size-4 shrink-0" />
+                    Workout complete — nice work!
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-xs">
+                    {!workoutRunning
+                      ? "This run has finished."
+                      : isPaused
+                        ? "Paused — driving manually. Drag the chart to change where you'll resume, or just resume to take back over from here."
+                        : workout.state === "active" && !isBeltReady
+                          ? `Resuming — ${beltWaitingText}`
+                          : "Following this plan. Use the workout controls above to pause or finish."}
+                  </p>
+                )}
 
                 {workoutRunning ? (
-                  isPaused ? (
+                  isFinished ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      disabled={!canRestartRun}
+                      onClick={restartIntervalRun}
+                    >
+                      <RotateCcw className="size-4" />
+                      Restart from beginning
+                    </Button>
+                  ) : isPaused ? (
                     <Button
                       type="button"
                       variant="outline"

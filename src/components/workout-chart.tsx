@@ -461,14 +461,14 @@ function WorkoutChartRow({
 
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between gap-2">
+      <div className="mb-1 flex items-baseline justify-between gap-2">
         <span className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
           <Icon className={`size-3.5 ${series.text}`} />
           {series.label}
         </span>
-        <span className="font-mono text-xs font-semibold tabular-nums">
+        <span className="font-mono text-2xl leading-none font-semibold tabular-nums">
           {displayValue !== undefined ? series.formatValue(displayValue) : "—"}
-          <span className="text-muted-foreground ml-1 text-[10px] font-normal">{series.unit}</span>
+          <span className="text-muted-foreground ml-1 text-xs font-normal">{series.unit}</span>
         </span>
       </div>
 
