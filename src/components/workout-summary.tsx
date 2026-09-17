@@ -1,11 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { CircleCheck, Download, FileDown, ImageDown, Loader2, TriangleAlert } from "lucide-react";
+import {
+  CircleCheck,
+  Download,
+  FileDown,
+  ImageDown,
+  Loader2,
+  Share2,
+  TriangleAlert,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { HeartRateZones } from "@/components/heart-rate-zones";
 import { ZoneSettingsPopover } from "@/components/runner-settings";
+import { ShareCard } from "@/components/share-card";
 import { useWorkout } from "@/components/workout-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +34,7 @@ import {
   paceUnitLabel,
   speedUnitLabel,
 } from "@/lib/format";
-import { saveWorkoutScreenshot, SUMMARY_CAPTURE_ID } from "@/lib/screenshot/capture";
+import { saveShareCard, saveWorkoutScreenshot, SUMMARY_CAPTURE_ID } from "@/lib/screenshot/capture";
 
 /** This app always displays in US customary units — see live-dashboard.tsx. */
 const DISPLAY_UNIT = "mph";
@@ -41,6 +50,7 @@ const DISPLAY_UNIT = "mph";
 export function WorkoutSummary() {
   const { workout, encodedActivity, downloadActivity, maxHeartRateBpm, mode } = useWorkout();
   const [capturingScreenshot, setCapturingScreenshot] = useState(false);
+  const [capturingShareCard, setCapturingShareCard] = useState(false);
 
   if (workout.state !== "finished" || workout.startedAt === undefined) return null;
 
@@ -64,8 +74,27 @@ export function WorkoutSummary() {
     }
   };
 
+  const downloadShareCard = async () => {
+    if (!encodedActivity) return;
+    const fileName = encodedActivity.fileName.replace(/\.fit$/i, "") + "-card.png";
+    setCapturingShareCard(true);
+    try {
+      await saveShareCard(fileName);
+      toast.success("Share card saved", { description: fileName });
+    } catch (error) {
+      toast.error("Could not save the share card", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setCapturingShareCard(false);
+    }
+  };
+
   return (
     <>
+      {/* Off-screen; only exists to give saveShareCard something to capture. */}
+      <ShareCard />
+
       <Card id={SUMMARY_CAPTURE_ID} className="border-primary/30">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -193,7 +222,28 @@ export function WorkoutSummary() {
                 )}
                 Download screenshot
               </Button>
+
+              <Button
+                size="lg"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                disabled={!encodedActivity || capturingShareCard}
+                onClick={() => void downloadShareCard()}
+              >
+                {capturingShareCard ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Share2 className="size-4" />
+                )}
+                Share card
+              </Button>
             </div>
+
+            <p className="text-muted-foreground text-xs">
+              &ldquo;Share card&rdquo; makes a square graphic with your distance and headline
+              stats — sized for posting to Strava or Instagram, rather than a screenshot of this
+              page.
+            </p>
 
             <p className="text-muted-foreground text-xs">
               Encoded in the browser with Garmin&apos;s FIT SDK. Nothing is uploaded. Import it

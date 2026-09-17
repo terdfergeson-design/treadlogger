@@ -51,8 +51,11 @@ const TRACK_BOTTOM = PAD + RADIUS * 2;
 const CENTER_Y = PAD + RADIUS;
 const CENTER_X_LEFT = PAD + RADIUS;
 const CENTER_X_RIGHT = PAD + RADIUS + STRAIGHT;
-const VIEW_WIDTH = PAD * 2 + RADIUS * 2 + STRAIGHT;
-const VIEW_HEIGHT = PAD * 2 + RADIUS * 2;
+/** Exported alongside TRACK_PATH so the share card (share-card.tsx) can draw
+ *  the same stadium outline as a decorative motif without re-deriving the
+ *  geometry — one shape, two renderers. */
+export const VIEW_WIDTH = PAD * 2 + RADIUS * 2 + STRAIGHT;
+export const VIEW_HEIGHT = PAD * 2 + RADIUS * 2;
 const ARC_LENGTH = Math.PI * RADIUS;
 const PERIMETER = STRAIGHT * 2 + ARC_LENGTH * 2;
 
@@ -60,7 +63,7 @@ const PERIMETER = STRAIGHT * 2 + ARC_LENGTH * 2;
 // walking bottom -> right turn -> top straight -> left turn -> back to start,
 // a sweep of 0 on *both* arcs is what keeps the outline bulging outward on
 // each side instead of one turn folding back on itself.
-const TRACK_PATH = [
+export const TRACK_PATH = [
   `M ${CENTER_X_LEFT} ${TRACK_BOTTOM}`,
   `L ${CENTER_X_RIGHT} ${TRACK_BOTTOM}`,
   `A ${RADIUS} ${RADIUS} 0 0 0 ${CENTER_X_RIGHT} ${TRACK_TOP}`,

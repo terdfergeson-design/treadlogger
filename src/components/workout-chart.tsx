@@ -77,7 +77,7 @@ const PLOT_H = 64;
  * (see the "pace" SeriesDef below) rather than treated as a gap, so a slow
  * start still reads as "pinned at the top", not as missing data.
  */
-const PACE_MAX_MIN_PER_MILE = 20;
+export const PACE_MAX_MIN_PER_MILE = 20;
 
 interface ChartPoint {
   elapsedS: number;
@@ -172,8 +172,9 @@ const SERIES: SeriesDef[] = [
 /** `M:SS`, signed. This chart's own y-domains are already sane (a handful of
  *  minutes per mile), so unlike `formatPace` in lib/format.ts this needs
  *  neither its unit conversion (values here are already minutes per mile)
- *  nor its "faster than this is implausible" cap. */
-function formatMinSec(totalMinutes: number): string {
+ *  nor its "faster than this is implausible" cap. Exported so share-card.tsx
+ *  can format its own pace axis ticks the same way. */
+export function formatMinSec(totalMinutes: number): string {
   if (!Number.isFinite(totalMinutes)) return "—";
   const sign = totalMinutes < 0 ? "-" : "";
   const abs = Math.abs(totalMinutes);
@@ -199,8 +200,11 @@ function niceStep(rawStep: number): number {
  * `max`, evenly spaced — which is what lets the y-axis label column below
  * use a plain CSS `justify-between` and land on the same pixels as the
  * SVG's own gridlines, with no shared layout code between the two.
+ *
+ * Exported so share-card.tsx's combined chart can give pace and heart rate
+ * their own real, rounded axis domains too, rather than reimplementing this.
  */
-function niceDomain(min: number, max: number, tickCount = 3): { min: number; max: number; ticks: number[] } {
+export function niceDomain(min: number, max: number, tickCount = 3): { min: number; max: number; ticks: number[] } {
   let lo = min;
   let hi = max;
   if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo === hi) {

@@ -30,11 +30,30 @@ export const TRACK_CAPTURE_ID = "track-progress-card";
 export const CHART_CAPTURE_ID = "workout-chart-card";
 export const SUMMARY_CAPTURE_ID = "workout-summary-card";
 
-/** Renders one element to a canvas at a crisp, capped device pixel ratio. */
-function elementToCanvas(element: HTMLElement, backgroundColor: string): Promise<HTMLCanvasElement> {
+/** DOM id of the share-card capture target — see share-card.tsx. A single
+ *  purpose-built element (not the app's own cards), so it's captured on its
+ *  own rather than stacked via stackCanvases below. */
+export const SHARE_CARD_CAPTURE_ID = "share-card";
+
+/** Fixed export scale for the share card, independent of the capturing
+ *  device's devicePixelRatio (unlike elementToCanvas's default below): the
+ *  card is a fixed-size design (540 CSS px square, see share-card.tsx) meant
+ *  to look the same wherever it's downloaded from, so it always renders at
+ *  2x — a crisp 1080x1080 PNG, matching the square size Strava/Instagram
+ *  expect for a shared photo. */
+const SHARE_CARD_SCALE = 2;
+
+/** Renders one element to a canvas. `scale` defaults to a crisp, capped
+ *  device pixel ratio; pass a fixed value (see SHARE_CARD_SCALE) for an
+ *  export that should look the same regardless of the capturing device. */
+function elementToCanvas(
+  element: HTMLElement,
+  backgroundColor: string,
+  scale: number = Math.min(2, window.devicePixelRatio || 1),
+): Promise<HTMLCanvasElement> {
   return html2canvas(element, {
     backgroundColor,
-    scale: Math.min(2, window.devicePixelRatio || 1),
+    scale,
     // html2canvas-pro doesn't render Tailwind's `ring` utility (the
     // box-shadow-based outline the Card component uses — see
     // `ring-foreground/10` in ui/card.tsx) as a thin outline: it paints the
@@ -134,5 +153,32 @@ export async function saveWorkoutScreenshot(fileName: string): Promise<void> {
   ]);
   const combined = stackCanvases([trackCanvas, chartCanvas, summaryCanvas], background);
   const blob = await canvasToPngBlob(combined);
+  downloadBlob(blob, fileName);
+}
+
+/**
+ * Captures the purpose-built share card (see share-card.tsx) and saves it as
+ * a PNG — a single square graphic designed for Strava/Instagram, distinct
+ * from `saveWorkoutScreenshot`'s three-card stack of the app's own UI.
+ *
+ * The card carries its own fixed dark design entirely via inline styles and
+ * literal rgb()/rgba() — deliberately never a Tailwind theme color class —
+ * so none of root causes #1-#4 in the workout-screenshot-feature doc (the
+ * app's oklch theme, Tailwind's own oklch default palette, and the Card
+ * component's ring/box-shadow) can apply to it in the first place.
+ */
+export async function saveShareCard(fileName: string): Promise<void> {
+  const card = document.getElementById(SHARE_CARD_CAPTURE_ID);
+  if (!(card instanceof HTMLElement)) {
+    throw new Error("Could not find the share card to capture");
+  }
+
+  // The card's own background is a fully opaque gradient (see share-card.tsx)
+  // painted in its own inline styles, so this fallback fill is never actually
+  // visible — html2canvas just needs some color behind a transparent element,
+  // and getComputedStyle().backgroundColor reads as "transparent" for a
+  // `background: linear-gradient(...)` shorthand, so it's not useful here.
+  const canvas = await elementToCanvas(card, "rgb(9, 11, 10)", SHARE_CARD_SCALE);
+  const blob = await canvasToPngBlob(canvas);
   downloadBlob(blob, fileName);
 }
