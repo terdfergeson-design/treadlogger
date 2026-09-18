@@ -3,6 +3,7 @@
 import { Activity, Bluetooth, Loader2, Plug, Unplug } from "lucide-react";
 
 import { ConnectionStatus } from "@/components/connection-status";
+import { TreadmillDebugPopover } from "@/components/treadmill-debug-popover";
 import { useWorkout } from "@/components/workout-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,11 +35,16 @@ export function TreadmillCard() {
               <ConnectionStatus state={treadmill.connection} className="mt-0.5" />
             </div>
           </div>
-          {treadmill.hasControl ? (
-            <Badge variant="secondary" className="shrink-0 text-[11px]">
-              Control granted
-            </Badge>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {treadmill.hasControl ? (
+              <Badge variant="secondary" className="text-[11px]">
+                Control granted
+              </Badge>
+            ) : null}
+            {mode === "bluetooth" ? (
+              <TreadmillDebugPopover deviceName={treadmill.deviceName} />
+            ) : null}
+          </div>
         </div>
       </CardHeader>
 

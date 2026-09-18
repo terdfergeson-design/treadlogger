@@ -1,3 +1,4 @@
+import { hexDump, logFtmsEvent } from "./ftms-debug-log";
 import {
   ControlOpCode,
   pause as pauseCommand,
@@ -43,6 +44,14 @@ export function isSecureContextForBluetooth(): boolean {
  * and the machine reports acceptance or rejection through a separate indication.
  * Commands are therefore serialized and each one waits for its own answer, so a
  * rejected target speed surfaces as a rejection instead of appearing to work.
+ *
+ * Every step below also calls `logFtmsEvent` (see `./ftms-debug-log`), which is
+ * a no-op unless a user has turned on the "Enable debug log" switch behind the
+ * gear icon on the treadmill card. It exists to diagnose a treadmill this app
+ * hasn't been tested against — different firmware can omit characteristics,
+ * encode fields differently, or answer control-point commands unexpectedly,
+ * and a captured trace of what actually happened beats guessing from a bug
+ * report alone.
  */
 export class WebBluetoothTreadmill extends TreadmillSource {
   private device?: BluetoothDevice;
@@ -90,6 +99,7 @@ export class WebBluetoothTreadmill extends TreadmillSource {
 
   async connect(): Promise<void> {
     if (!isWebBluetoothAvailable()) {
+      logFtmsEvent("connect:unsupported");
       this.patch({
         connection: "unsupported",
         error: "This browser does not support Web Bluetooth.",
@@ -97,6 +107,7 @@ export class WebBluetoothTreadmill extends TreadmillSource {
       return;
     }
 
+    logFtmsEvent("requestDevice:start");
     try {
       this.patch({ connection: "requesting", error: undefined });
 
@@ -104,6 +115,7 @@ export class WebBluetoothTreadmill extends TreadmillSource {
         filters: [{ services: [FITNESS_MACHINE_SERVICE] }],
         optionalServices: [DEVICE_INFORMATION_SERVICE],
       });
+      logFtmsEvent("requestDevice:resolved", { name: device.name, id: device.id });
 
       this.device = device;
       device.addEventListener("gattserverdisconnected", this.handleDisconnect);
@@ -113,31 +125,38 @@ export class WebBluetoothTreadmill extends TreadmillSource {
         deviceName: device.name ?? "Treadmill",
       });
 
+      logFtmsEvent("gatt.connect:start");
       const server = await device.gatt?.connect();
       if (!server) throw new Error("Could not open a GATT connection to the treadmill.");
+      logFtmsEvent("gatt.connect:resolved");
 
       const service = await server.getPrimaryService(FITNESS_MACHINE_SERVICE);
+      logFtmsEvent("getPrimaryService:resolved", { service: FITNESS_MACHINE_SERVICE.toString() });
 
       await this.subscribeToTreadmillData(service);
       await this.subscribeToStatus(service);
       await this.subscribeToControlPoint(service);
       await this.readCapabilities(service);
 
+      logFtmsEvent("connect:connected");
       this.patch({ connection: "connected" });
 
       // Requesting control up front means the workout controls are live as soon
       // as the card turns green, rather than failing on the first press.
       await this.requestControl();
     } catch (error) {
+      const message = describeBluetoothError(error);
+      logFtmsEvent("connect:error", { message, name: error instanceof Error ? error.name : undefined });
       this.patch({
         connection: this.snapshot.connection === "requesting" ? "idle" : "error",
-        error: describeBluetoothError(error),
+        error: message,
       });
       throw error;
     }
   }
 
   async disconnect(): Promise<void> {
+    logFtmsEvent("disconnect:manual");
     this.failPending(new Error("Disconnected from the treadmill."));
     this.device?.removeEventListener("gattserverdisconnected", this.handleDisconnect);
 
@@ -152,10 +171,15 @@ export class WebBluetoothTreadmill extends TreadmillSource {
   }
 
   async requestControl(): Promise<void> {
+    logFtmsEvent("requestControl:start");
     const response = await this.sendCommand(
       ControlOpCode.requestControl,
       requestControlCommand(),
     );
+    logFtmsEvent("requestControl:response", {
+      succeeded: response.succeeded,
+      message: response.message,
+    });
     this.patch({ hasControl: response.succeeded, lastMessage: response.message });
   }
 
@@ -187,17 +211,22 @@ export class WebBluetoothTreadmill extends TreadmillSource {
 
   private async subscribeToTreadmillData(service: BluetoothRemoteGATTService): Promise<void> {
     const characteristic = await service.getCharacteristic(FTMS.treadmillData);
+    logFtmsEvent("treadmillData:characteristic-found");
     characteristic.addEventListener("characteristicvaluechanged", (event) => {
       const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
       if (!value) return;
 
       try {
-        this.mergeTreadmillData(parseTreadmillData(value, this.speedUnit), Date.now());
+        const parsed = parseTreadmillData(value, this.speedUnit);
+        logFtmsEvent("treadmillData:notification", { raw: hexDump(value), parsed });
+        this.mergeTreadmillData(parsed, Date.now());
       } catch (error) {
+        logFtmsEvent("treadmillData:malformed", { raw: hexDump(value) });
         console.warn("Ignoring malformed Treadmill Data notification", error);
       }
     });
     await characteristic.startNotifications();
+    logFtmsEvent("treadmillData:notifications-started");
   }
 
   private async subscribeToStatus(service: BluetoothRemoteGATTService): Promise<void> {
@@ -205,6 +234,7 @@ export class WebBluetoothTreadmill extends TreadmillSource {
     // not notice console-initiated stops.
     try {
       const characteristic = await service.getCharacteristic(FTMS.status);
+      logFtmsEvent("status:characteristic-found");
       characteristic.addEventListener("characteristicvaluechanged", (event) => {
         const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
         if (!value) return;
@@ -213,29 +243,36 @@ export class WebBluetoothTreadmill extends TreadmillSource {
           // "Target speed changed" describes the same Control Point value as
           // Set Target Speed, so it uses the command unit, not the readout one.
           const status = parseFitnessMachineStatus(value, this.commandSpeedUnit);
+          logFtmsEvent("status:notification", { raw: hexDump(value), status });
           this.patch({
             lastMessage: status.message,
             ...(status.state ? { machineState: status.state } : {}),
             ...(status.controlLost ? { hasControl: false } : {}),
           });
         } catch (error) {
+          logFtmsEvent("status:malformed", { raw: hexDump(value) });
           console.warn("Ignoring malformed Fitness Machine Status notification", error);
         }
       });
       await characteristic.startNotifications();
+      logFtmsEvent("status:notifications-started");
     } catch {
+      logFtmsEvent("status:not-present");
       console.info("Treadmill does not expose Fitness Machine Status");
     }
   }
 
   private async subscribeToControlPoint(service: BluetoothRemoteGATTService): Promise<void> {
     const characteristic = await service.getCharacteristic(FTMS.controlPoint);
+    logFtmsEvent("controlPoint:characteristic-found");
     characteristic.addEventListener("characteristicvaluechanged", (event) => {
       const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
       if (!value) return;
+      logFtmsEvent("controlPoint:indication", { raw: hexDump(value) });
       this.resolvePending(value);
     });
     await characteristic.startNotifications();
+    logFtmsEvent("controlPoint:notifications-started");
     this.controlPoint = characteristic;
   }
 
@@ -243,7 +280,9 @@ export class WebBluetoothTreadmill extends TreadmillSource {
     // Each of these is optional. Read them independently so one missing
     // characteristic does not cost us the others.
     await this.tryRead(service, FTMS.feature, (value) => {
-      this.patch({ features: parseFitnessMachineFeature(value) });
+      const features = parseFitnessMachineFeature(value);
+      logFtmsEvent("feature:read", { raw: hexDump(value), features });
+      this.patch({ features });
     });
     await this.tryRead(service, FTMS.supportedSpeedRange, (value) => {
       this.rawSpeedRange = new Uint8Array(
@@ -251,10 +290,14 @@ export class WebBluetoothTreadmill extends TreadmillSource {
       );
       // Bounds the Control Point's Set Target Speed parameter, so it is read
       // in the command unit, not the Treadmill Data readout unit.
-      this.patch({ speedRange: parseSupportedSpeedRange(value, this.commandSpeedUnit) });
+      const speedRange = parseSupportedSpeedRange(value, this.commandSpeedUnit);
+      logFtmsEvent("supportedSpeedRange:read", { raw: hexDump(value), speedRange });
+      this.patch({ speedRange });
     });
     await this.tryRead(service, FTMS.supportedInclinationRange, (value) => {
-      this.patch({ inclineRange: parseSupportedInclinationRange(value) });
+      const inclineRange = parseSupportedInclinationRange(value);
+      logFtmsEvent("supportedInclinationRange:read", { raw: hexDump(value), inclineRange });
+      this.patch({ inclineRange });
     });
   }
 
@@ -267,6 +310,7 @@ export class WebBluetoothTreadmill extends TreadmillSource {
       const characteristic = await service.getCharacteristic(uuid);
       handle(await characteristic.readValue());
     } catch (error) {
+      logFtmsEvent("characteristic:not-present", { uuid: `0x${uuid.toString(16)}` });
       console.info(`Treadmill did not provide characteristic 0x${uuid.toString(16)}`, error);
     }
   }
@@ -305,9 +349,12 @@ export class WebBluetoothTreadmill extends TreadmillSource {
     const characteristic = this.controlPoint;
     if (!characteristic) throw new Error("The treadmill is not connected.");
 
+    logFtmsEvent("controlPoint:write", { opCode: `0x${opCode.toString(16)}`, payload: hexToString(payload) });
+
     const response = new Promise<ControlPointResponse>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending = undefined;
+        logFtmsEvent("controlPoint:timeout", { opCode: `0x${opCode.toString(16)}` });
         reject(new Error("The treadmill did not answer the command in time."));
       }, CONTROL_RESPONSE_TIMEOUT_MS);
 
@@ -321,7 +368,9 @@ export class WebBluetoothTreadmill extends TreadmillSource {
         await characteristic.writeValue(toArrayBuffer(payload));
       }
     } catch (error) {
-      this.failPending(new Error(describeBluetoothError(error)));
+      const message = describeBluetoothError(error);
+      logFtmsEvent("controlPoint:write-error", { opCode: `0x${opCode.toString(16)}`, message });
+      this.failPending(new Error(message));
       throw error;
     }
 
@@ -335,6 +384,7 @@ export class WebBluetoothTreadmill extends TreadmillSource {
     try {
       response = parseControlPointResponse(value);
     } catch (error) {
+      logFtmsEvent("controlPoint:malformed-response", { raw: hexDump(value) });
       console.warn("Ignoring malformed Control Point indication", error);
       return;
     }
@@ -348,12 +398,21 @@ export class WebBluetoothTreadmill extends TreadmillSource {
     // wrong request, so mismatched op codes are dropped and the caller keeps
     // waiting for its own answer or times out.
     if (pending.opCode !== response.requestOpCode) {
+      logFtmsEvent("controlPoint:opcode-mismatch", {
+        expected: `0x${pending.opCode.toString(16)}`,
+        got: `0x${response.requestOpCode.toString(16)}`,
+      });
       console.warn(
         `Control Point answered op code 0x${response.requestOpCode.toString(16)} while awaiting 0x${pending.opCode.toString(16)}`,
       );
       return;
     }
 
+    logFtmsEvent("controlPoint:response", {
+      opCode: `0x${response.requestOpCode.toString(16)}`,
+      succeeded: response.succeeded,
+      message: response.message,
+    });
     clearTimeout(pending.timer);
     this.pending = undefined;
     pending.resolve(response);
@@ -368,6 +427,7 @@ export class WebBluetoothTreadmill extends TreadmillSource {
   }
 
   private readonly handleDisconnect = (): void => {
+    logFtmsEvent("disconnect:gattserverdisconnected");
     this.failPending(new Error("The treadmill disconnected."));
     this.controlPoint = undefined;
     this.patch({
@@ -388,6 +448,13 @@ function toArrayBuffer(payload: Uint8Array): ArrayBuffer {
   const copy = new ArrayBuffer(payload.byteLength);
   new Uint8Array(copy).set(payload);
   return copy;
+}
+
+/** Renders a write payload as hex for the debug log, without a DataView wrapper. */
+function hexToString(payload: Uint8Array): string {
+  return Array.from(payload)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join(" ");
 }
 
 /**

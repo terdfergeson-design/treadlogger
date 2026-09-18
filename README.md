@@ -86,6 +86,12 @@ prompt. There is no way to skip this — it is a deliberate part of the Web Blue
 4. It also reads the machine's **Supported Speed Range** and **Supported Inclination Range**, and
    uses them as the bounds and step size of the belt-control sliders.
 
+If a treadmill this app hasn't been tried against isn't connecting or behaving right, the gear icon
+on the treadmill card has a **debug log**, off by default. Turning it on captures every step of the
+Bluetooth connection — device selection, service and characteristic discovery, each control-point
+command and response, and every Treadmill Data notification — so it can be downloaded as a text file
+and used to figure out what that machine's firmware is actually sending.
+
 **Heart rate strap**
 
 1. Wet the electrodes and put the strap on. A dry strap either will not advertise or will report no
@@ -113,6 +119,29 @@ characteristic.
 Heart-rate zones are percentages of your maximum heart rate, which you can set under **Zone
 settings**. Zones only affect the on-screen breakdown; raw per-second samples go into the FIT file
 either way.
+
+## Interval workouts
+
+The interval workout card sits under the plain Start/Pause/Finish controls and works with
+`.treadlogger.json` plan files: **Load workout** opens one from disk, **Create workout** opens a
+popup builder (templates, drag-to-reorder blocks, and a composer for warmup/interval/steady/
+cooldown segments) and hands the result straight back to the card, and **Download workout** saves
+the currently loaded plan back out.
+
+Once a plan is loaded, the card charts its speed, incline and projected elevation gain over the
+whole planned duration. Starting the plan is separate from starting the workout: use the regular
+**Start** button as always, and once the belt is confirmed up to speed, a **Start interval run**
+button appears here. From that point the app drives the treadmill's speed and incline itself as
+the plan advances — there is no mode that just tracks progress without touching the belt.
+
+- **Pause interval** / **Resume interval** hands control back to the runner mid-run without ending
+  the workout: automatic driving stands down, the plan's own clock freezes, and the treadmill keeps
+  running under manual control until resumed.
+- While paused, the chart becomes a scrubber — drag it, click it, or use the arrow/Home/End keys —
+  to change exactly where resuming will pick back up, including skipping or repeating a segment.
+- The same belt-speed check gates both the first start and every resume after a pause, since the
+  treadmill ramps up from a fixed slow speed each time: the button and status text stay disabled
+  until the belt has actually proven it is holding speed, not just after a fixed delay.
 
 ## FIT export
 
@@ -177,6 +206,7 @@ src/
     mock/                     Simulator: payload builders, physiology, simulated devices
     workout/                  Session recorder and heart-rate zones
     fit/                      FIT activity encoder, verification and download
+    intervals/                Interval plan model, timeline flattening, file parsing/serializing
 ```
 
 The two device backends sit behind the `TreadmillSource` and `HeartRateSource` interfaces in
