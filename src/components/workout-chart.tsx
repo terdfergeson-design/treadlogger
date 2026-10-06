@@ -374,7 +374,7 @@ export function WorkoutChart() {
                     setHoverFrac(null);
                   }}
                   className={cn(
-                    "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+                    "rounded-full px-3.5 py-2.5 text-xs font-semibold transition-colors",
                     selected
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted/60 text-muted-foreground hover:bg-muted",

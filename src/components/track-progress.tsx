@@ -229,6 +229,35 @@ export function TrackProgress() {
   const trailLength = progress * PERIMETER;
   const transition = lapWrapped ? "none" : `all ${POSITION_TRANSITION_MS}ms linear`;
 
+  const lapLengthPicker = (className: string) => (
+    <div
+      className={cn("items-center gap-1.5", className)}
+      role="radiogroup"
+      aria-label="Track lap length"
+    >
+      {LAP_LENGTH_OPTIONS.map((option) => {
+        const selected = option.miles === lapLengthMiles;
+        return (
+          <button
+            key={option.miles}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => setLapLengthMiles(option.miles)}
+            className={cn(
+              "rounded-full px-3.5 py-2.5 text-xs font-semibold transition-colors",
+              selected
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted/60 text-muted-foreground hover:bg-muted",
+            )}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <Card id={TRACK_CAPTURE_ID} className="gap-3">
       <CardHeader className="pb-0">
@@ -240,136 +269,119 @@ export function TrackProgress() {
         </div>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-4 pt-1 sm:flex-row sm:items-start">
-        <div className="flex flex-col items-center gap-2 sm:flex-1">
-          <div
-            className="flex items-center gap-1.5"
-            role="radiogroup"
-            aria-label="Track lap length"
-          >
-            {LAP_LENGTH_OPTIONS.map((option) => {
-              const selected = option.miles === lapLengthMiles;
-              return (
-                <button
-                  key={option.miles}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  onClick={() => setLapLengthMiles(option.miles)}
-                  className={cn(
-                    "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
-                    selected
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted/60 text-muted-foreground hover:bg-muted",
-                  )}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
+      {/* On a phone the splits stay to the right of the track (rather than
+          stacking under it), and the track shrinks to whatever width is
+          left. The lap-length picker moves to its own full-width row above
+          on phones, since the narrow track column has no room for it. */}
+      <CardContent className="flex flex-col gap-3 pt-1">
+        {lapLengthPicker("flex justify-center sm:hidden")}
 
-          <svg
-            viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
-            className="w-full max-w-64 sm:max-w-none"
-            role="img"
-            aria-label={`Lap ${lap} of the ${selectedLapLength.label} track, ${Math.round(progress * 100)}% complete`}
-          >
-            <path
-              d={TRACK_PATH}
-              fill="none"
-              strokeWidth={STROKE_WIDTH}
-              className="stroke-muted-foreground/20"
-            />
-            <path
-              d={TRACK_PATH}
-              fill="none"
-              strokeWidth={STROKE_WIDTH}
-              strokeLinecap="round"
-              className="stroke-primary"
-              // A constant dasharray (dash = gap = the full loop) with an
-              // animated dashoffset reveals the first `trailLength` of the
-              // path. This is driven off dashoffset rather than a varying
-              // dasharray specifically so the glide above has one plain
-              // number to transition — CSS interpolates a single value
-              // reliably; animating a two-part "dash gap" string is not
-              // guaranteed to interpolate smoothly the same way.
-              strokeDasharray={PERIMETER}
-              strokeDashoffset={PERIMETER - trailLength}
-              style={{ transition }}
-            />
-            {/* Start/finish line, crossing the bottom straight at fraction 0 */}
-            <line
-              x1={CENTER_X_LEFT}
-              y1={TRACK_BOTTOM - STROKE_WIDTH / 2 - 6}
-              x2={CENTER_X_LEFT}
-              y2={TRACK_BOTTOM + STROKE_WIDTH / 2 + 6}
-              strokeWidth={3}
-              className="stroke-foreground/30"
-            />
-            <circle
-              cx={dot.x}
-              cy={dot.y}
-              r={DOT_RADIUS}
-              strokeWidth={3}
-              className="fill-primary stroke-background"
-              style={{ transition }}
-            />
-          </svg>
+        <div className="flex flex-row items-start gap-3 sm:gap-4">
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-2">
+            {lapLengthPicker("hidden sm:flex")}
 
-          <p className="text-muted-foreground font-mono text-xs tabular-nums">
-            {lapMiles.toFixed(2)} / {lapLengthMiles.toFixed(2)} mi this lap
-          </p>
-        </div>
-
-        <Separator orientation="vertical" className="hidden sm:block" />
-
-        <div className="shrink-0">
-          <div
-            className={`text-muted-foreground grid ${SPLIT_ROW_GRID} gap-x-2 px-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wide`}
-          >
-            <span>Lap</span>
-            <span>Pace</span>
-            <span>Elev</span>
-            <span>HR</span>
-          </div>
-
-          {splits.length > 0 ? (
-            <div
-              className="space-y-0.5 overflow-y-auto"
-              style={{ maxHeight: `${VISIBLE_SPLIT_ROWS * 24}px` }}
+            <svg
+              viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
+              className="w-full"
+              role="img"
+              aria-label={`Lap ${lap} of the ${selectedLapLength.label} track, ${Math.round(progress * 100)}% complete`}
             >
-              {splits.map((split) => (
-                <div
-                  key={split.lap}
-                  className={`odd:bg-muted/40 grid ${SPLIT_ROW_GRID} items-center gap-x-2 rounded-md px-1.5 py-1`}
-                >
-                  <span className="text-muted-foreground text-xs font-medium tabular-nums">
-                    {split.lap}
-                  </span>
-                  <span className="font-mono text-xs font-semibold tabular-nums">
-                    {formatPace(paceFromSpeed(split.avgSpeedKph), DISPLAY_UNIT)}
-                    <span className="text-muted-foreground ml-1 text-[10px] font-normal">
-                      {paceUnitLabel(DISPLAY_UNIT)}
-                    </span>
-                  </span>
-                  <span className="text-muted-foreground text-right font-mono text-xs tabular-nums">
-                    +{formatElevation(split.elevationGainM)} ft
-                  </span>
-                  <span className="text-muted-foreground text-right font-mono text-xs tabular-nums">
-                    {formatHeartRate(split.avgHeartRateBpm)}
-                    {split.avgHeartRateBpm !== undefined ? (
-                      <span className="ml-1 text-[10px] font-normal">bpm</span>
-                    ) : null}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-muted-foreground max-w-40 px-1.5 py-2 text-xs">
-              Lap splits appear here after your first {selectedLapLength.label}.
+              <path
+                d={TRACK_PATH}
+                fill="none"
+                strokeWidth={STROKE_WIDTH}
+                className="stroke-muted-foreground/20"
+              />
+              <path
+                d={TRACK_PATH}
+                fill="none"
+                strokeWidth={STROKE_WIDTH}
+                strokeLinecap="round"
+                className="stroke-primary"
+                // A constant dasharray (dash = gap = the full loop) with an
+                // animated dashoffset reveals the first `trailLength` of the
+                // path. This is driven off dashoffset rather than a varying
+                // dasharray specifically so the glide above has one plain
+                // number to transition — CSS interpolates a single value
+                // reliably; animating a two-part "dash gap" string is not
+                // guaranteed to interpolate smoothly the same way.
+                strokeDasharray={PERIMETER}
+                strokeDashoffset={PERIMETER - trailLength}
+                style={{ transition }}
+              />
+              {/* Start/finish line, crossing the bottom straight at fraction 0 */}
+              <line
+                x1={CENTER_X_LEFT}
+                y1={TRACK_BOTTOM - STROKE_WIDTH / 2 - 6}
+                x2={CENTER_X_LEFT}
+                y2={TRACK_BOTTOM + STROKE_WIDTH / 2 + 6}
+                strokeWidth={3}
+                className="stroke-foreground/30"
+              />
+              <circle
+                cx={dot.x}
+                cy={dot.y}
+                r={DOT_RADIUS}
+                strokeWidth={3}
+                className="fill-primary stroke-background"
+                style={{ transition }}
+              />
+            </svg>
+
+            <p className="text-muted-foreground text-center font-mono text-[11px] leading-tight tabular-nums sm:text-xs">
+              {lapMiles.toFixed(2)} / {lapLengthMiles.toFixed(2)} mi this lap
             </p>
-          )}
+          </div>
+
+          <Separator orientation="vertical" className="hidden sm:block" />
+
+          <div className="shrink-0">
+            <div
+              className={`text-muted-foreground grid ${SPLIT_ROW_GRID} gap-x-1.5 px-1 pb-1 text-[10px] sm:gap-x-2 sm:px-1.5 font-semibold uppercase tracking-wide`}
+            >
+              <span>Lap</span>
+              <span>Pace</span>
+              <span>Elev</span>
+              <span>HR</span>
+            </div>
+
+            {splits.length > 0 ? (
+              <div
+                className="space-y-0.5 overflow-y-auto"
+                style={{ maxHeight: `${VISIBLE_SPLIT_ROWS * 24}px` }}
+              >
+                {splits.map((split) => (
+                  <div
+                    key={split.lap}
+                    className={`odd:bg-muted/40 grid ${SPLIT_ROW_GRID} items-center gap-x-1.5 rounded-md px-1 py-1 sm:gap-x-2 sm:px-1.5`}
+                  >
+                    <span className="text-muted-foreground text-xs font-medium tabular-nums">
+                      {split.lap}
+                    </span>
+                    <span className="font-mono text-xs font-semibold tabular-nums">
+                      {formatPace(paceFromSpeed(split.avgSpeedKph), DISPLAY_UNIT)}
+                      <span className="text-muted-foreground ml-1 text-[10px] font-normal">
+                        {paceUnitLabel(DISPLAY_UNIT)}
+                      </span>
+                    </span>
+                    <span className="text-muted-foreground text-right font-mono text-xs tabular-nums">
+                      +{formatElevation(split.elevationGainM)} ft
+                    </span>
+                    <span className="text-muted-foreground text-right font-mono text-xs tabular-nums">
+                      {formatHeartRate(split.avgHeartRateBpm)}
+                      {split.avgHeartRateBpm !== undefined ? (
+                        <span className="ml-1 text-[10px] font-normal">bpm</span>
+                      ) : null}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground max-w-32 px-1 py-2 text-xs sm:max-w-40 sm:px-1.5">
+                Lap splits appear here after your first {selectedLapLength.label}.
+              </p>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

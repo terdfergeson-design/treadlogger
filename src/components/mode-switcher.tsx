@@ -19,12 +19,12 @@ export function ModeSwitcher() {
 
   return (
     <Tabs value={mode} onValueChange={(value) => setMode(value as DeviceMode)}>
-      <TabsList>
-        <TabsTrigger value="bluetooth" disabled={locked}>
+      <TabsList className="group-data-horizontal/tabs:h-12">
+        <TabsTrigger value="bluetooth" disabled={locked} className="px-3">
           <Bluetooth className="size-3.5" />
           Bluetooth
         </TabsTrigger>
-        <TabsTrigger value="simulator" disabled={locked}>
+        <TabsTrigger value="simulator" disabled={locked} className="px-3">
           <FlaskConical className="size-3.5" />
           Simulator
         </TabsTrigger>

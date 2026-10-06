@@ -168,7 +168,7 @@ export function TreadmillControls() {
           <Popover>
             <PopoverTrigger
               aria-label="Treadmill unit quirks"
-              className={buttonVariants({ variant: "ghost", size: "icon" })}
+              className={buttonVariants({ variant: "ghost", size: "compact-icon" })}
             >
               <Settings className="size-4" />
             </PopoverTrigger>
@@ -453,7 +453,7 @@ function ControlRow({
       <div className="flex items-center gap-2">
         <Button
           variant="outline"
-          size="icon"
+          size="compact-icon"
           className={`size-9 shrink-0 transition-colors duration-300 ${
             flash === "decrease" ? FLASH_CLASSES : ""
           }`}
@@ -478,7 +478,7 @@ function ControlRow({
 
         <Button
           variant="outline"
-          size="icon"
+          size="compact-icon"
           className={`size-9 shrink-0 transition-colors duration-300 ${
             flash === "increase" ? FLASH_CLASSES : ""
           }`}
@@ -542,6 +542,7 @@ function NudgeButton({
     <Button
       type="button"
       variant="outline"
+      size="compact-default"
       disabled={disabled}
       onClick={handleClick}
       aria-label={`${direction === "decrease" ? "Decrease" : "Increase"} ${label.toLowerCase()}`}
@@ -594,6 +595,7 @@ function PresetButton({
     <Button
       type="button"
       variant="outline"
+      size="compact-default"
       disabled={disabled}
       onClick={handleClick}
       className={`h-auto flex-col gap-0.5 py-3 leading-tight transition-colors duration-300 ${
@@ -659,7 +661,7 @@ function PresetSettingsPopover({
     <Popover>
       <PopoverTrigger
         aria-label="Preset settings"
-        className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
+        className={buttonVariants({ variant: "ghost", size: "compact-icon-sm" })}
       >
         <SlidersHorizontal className="size-3.5" />
       </PopoverTrigger>
@@ -713,11 +715,11 @@ function PresetSettingsPopover({
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1" onClick={resetSpeedPresets}>
+          <Button variant="outline" size="compact-sm" className="flex-1" onClick={resetSpeedPresets}>
             <RotateCcw className="size-3.5" />
             Reset speed
           </Button>
-          <Button variant="outline" size="sm" className="flex-1" onClick={resetInclinePresets}>
+          <Button variant="outline" size="compact-sm" className="flex-1" onClick={resetInclinePresets}>
             <RotateCcw className="size-3.5" />
             Reset incline
           </Button>

@@ -299,7 +299,7 @@ export function DashboardBlocks({ blocks }: { blocks: DashboardBlock[] }) {
                 type="button"
                 aria-label={`Drag to reorder ${block.label}`}
                 onPointerDown={(e) => handlePointerDown(e, id)}
-                className="text-muted-foreground hover:text-foreground hover:bg-muted -ml-1.5 flex size-7 shrink-0 touch-none cursor-grab items-center justify-center rounded-md transition-colors active:cursor-grabbing"
+                className="text-muted-foreground hover:text-foreground hover:bg-muted -ml-1.5 flex h-10.5 w-9 shrink-0 touch-none cursor-grab items-center justify-center rounded-md transition-colors active:cursor-grabbing"
               >
                 <GripVertical className="size-4" />
               </button>

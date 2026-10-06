@@ -237,7 +237,7 @@ function DurationField({ value, onChange }: { value: number; onChange: (value: n
             type="button"
             onClick={() => onChange(seconds)}
             className={cn(
-              "rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
+              "rounded-full px-2.5 py-1.5 text-[10px] font-medium transition-colors",
               value === seconds
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted/60 text-muted-foreground hover:bg-muted",
@@ -424,7 +424,7 @@ export function IntervalBuilder({
               aria-checked={composerType === type.value}
               onClick={() => setComposerType(type.value)}
               className={cn(
-                "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+                "rounded-full px-3.5 py-2.5 text-xs font-semibold transition-colors",
                 composerType === type.value ? type.activeClass : "bg-muted/60 text-muted-foreground hover:bg-muted",
               )}
             >

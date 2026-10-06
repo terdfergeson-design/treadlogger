@@ -126,14 +126,6 @@ interface WorkoutContextValue {
   resumeWorkout: () => Promise<void>;
   finishWorkout: () => Promise<void>;
   discardWorkout: () => void;
-  /**
-   * Deletes the persisted copy of this workout (see persistence.ts) without
-   * touching the recorder or the on-screen summary — unlike `discardWorkout`,
-   * which also resets the recorder and returns to "idle". For manually
-   * telling the app "I've got what I need, stop keeping this recoverable"
-   * while still looking at the finished summary.
-   */
-  clearSavedWorkoutData: () => void;
 
   encodedActivity: EncodedActivity | null;
   downloadActivity: () => void;
@@ -521,13 +513,6 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     lastPersistedSampleCountRef.current = 0;
   }, [recorder]);
 
-  const clearSavedWorkoutData = useCallback(() => {
-    clearSavedWorkout();
-    toast.success("Saved workout data cleared", {
-      description: "This workout will no longer be recovered after a refresh.",
-    });
-  }, []);
-
   const downloadActivity = useCallback(() => {
     if (!encodedActivity) return;
     downloadBytes(encodedActivity.bytes, encodedActivity.fileName);
@@ -564,7 +549,6 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       resumeWorkout,
       finishWorkout,
       discardWorkout,
-      clearSavedWorkoutData,
       encodedActivity,
       downloadActivity,
       busy,
@@ -597,7 +581,6 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       resumeWorkout,
       finishWorkout,
       discardWorkout,
-      clearSavedWorkoutData,
       encodedActivity,
       downloadActivity,
       busy,

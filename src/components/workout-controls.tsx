@@ -27,11 +27,11 @@ export function WorkoutControls() {
           <>
             <Button
               size="lg"
-              className="flex-1"
+              className="sm:flex-1"
               disabled={busy || !treadmillConnected}
               onClick={() => void startWorkout()}
             >
-              {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+              {busy ? <Loader2 className="size-5 animate-spin" /> : <Play className="size-5" />}
               Start workout
             </Button>
             <p className="text-muted-foreground text-xs sm:max-w-56">
@@ -47,21 +47,21 @@ export function WorkoutControls() {
             <Button
               size="lg"
               variant="secondary"
-              className="flex-1"
+              className="sm:flex-1"
               disabled={busy}
               onClick={() => void pauseWorkout()}
             >
-              <Pause className="size-4" />
+              <Pause className="size-5" />
               Pause
             </Button>
             <Button
               size="lg"
               variant="destructive"
-              className="flex-1"
+              className="sm:flex-1"
               disabled={busy}
               onClick={() => void finishWorkout()}
             >
-              <CircleStop className="size-4" />
+              <CircleStop className="size-5" />
               Finish
             </Button>
           </>
@@ -71,21 +71,21 @@ export function WorkoutControls() {
           <>
             <Button
               size="lg"
-              className="flex-1"
+              className="sm:flex-1"
               disabled={busy}
               onClick={() => void resumeWorkout()}
             >
-              <Play className="size-4" />
+              <Play className="size-5" />
               Resume
             </Button>
             <Button
               size="lg"
               variant="destructive"
-              className="flex-1"
+              className="sm:flex-1"
               disabled={busy}
               onClick={() => void finishWorkout()}
             >
-              <CircleStop className="size-4" />
+              <CircleStop className="size-5" />
               Finish
             </Button>
           </>
@@ -95,15 +95,15 @@ export function WorkoutControls() {
           <>
             <Button
               size="lg"
-              className="flex-1"
+              className="sm:flex-1"
               disabled={busy || !treadmillConnected}
               onClick={() => void startWorkout()}
             >
-              <Play className="size-4" />
+              <Play className="size-5" />
               Start another workout
             </Button>
             <Button size="lg" variant="ghost" onClick={discardWorkout}>
-              <RotateCcw className="size-4" />
+              <RotateCcw className="size-5" />
               Clear
             </Button>
             {!treadmillConnected ? (

@@ -49,7 +49,7 @@ const DISPLAY_UNIT = "mph";
  * the FIT/export controls below it are deliberately left out of the image.
  */
 export function WorkoutSummary() {
-  const { workout, encodedActivity, downloadActivity, maxHeartRateBpm, mode, clearSavedWorkoutData } =
+  const { workout, encodedActivity, downloadActivity, maxHeartRateBpm, mode, discardWorkout } =
     useWorkout();
   const [capturingScreenshot, setCapturingScreenshot] = useState(false);
   const [capturingShareCard, setCapturingShareCard] = useState(false);
@@ -118,9 +118,9 @@ export function WorkoutSummary() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Delete saved workout data"
-                title="Delete saved workout data"
-                onClick={clearSavedWorkoutData}
+                aria-label="Clear workout"
+                title="Clear workout"
+                onClick={discardWorkout}
                 // Excluded from the screenshot/share-card capture (see
                 // capture.ts's onclone-based tricks for the same idea) — this
                 // is app chrome, not part of the run's record.
